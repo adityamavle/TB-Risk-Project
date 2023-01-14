@@ -1,0 +1,20 @@
+from pydantic import BaseModel
+class simulation(BaseModel):
+    size: int
+    percentage_alcoholism: float
+    percentage_depression: float 
+    percentage_tobacco: float
+    percentage_alcoholism_depression: float
+    percentage_tobacco_alcoholism: float
+    percentage_tobacco_depression: float 
+    percentage_tobacco_alcoholism_depression: float
+    treatment_noth: float
+    treatment_1_conditions: float
+    treatment_2_conditions: float
+    treatment_3_conditions: float
+    treatment_intervention: float
+    age: list[float]
+    gender: list[float]
+    bmi: list[float]
+    edu: list[float]
+    seed: int

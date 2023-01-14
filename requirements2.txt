@@ -1,0 +1,9 @@
+uvicorn
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+statsmodels
+fastapi
+pydantic
