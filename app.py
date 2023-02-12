@@ -12,14 +12,12 @@ from fastapi import FastAPI
 from simulation import simulation
 #from power_analysis import power_analysis
 from fastapi.responses import StreamingResponse
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile,File
 from pydantic import BaseModel
+import io 
 #from flask import Flask, request
 app = FastAPI()
-class poweranalysis(BaseModel):
-    x: str
-    y: str
-    case_no: int
+
 
 @app.get('/')
 def index():
@@ -187,35 +185,49 @@ def create_dataset(data:simulation):
   except Exception as ex:
     print(ex)
     
-
-
-@app.post('/power_analysis')
-async def statspower(file:UploadFile):
+"""class poweranalysis(BaseModel):
+    x: str
+    y: str
+    #case_no: int
+    #message:str
+"""
+@app.post('/statspower')
+def statspower(x:str,y:str,file:UploadFile=File(...)):
  """ x = value of treatment variable (gives us idea of the population - na, a, nt, t, adt, etc)
     y = value of control variable """
  try:
-    contents = await file.read()
+    #contents = await file.read()
     #data = data.dict()
-    #x = data.x
-    #y = data.y
-    #case_no = data.case_no
-    #  csv_file= create_dataset("size","percentage_alcoholism", "percentage_depression", "percentage_tobacco","percentage_alcoholism_depression",  "percentage_tobacco_alcoholism", "percentage_tobacco_depression", "percentage_tobacco_alcoholism_depression","treatment_noth,treatment_1_conditions","treatment_2_conditions","treatment_3_conditions","treatment_intervention","age","gender","bmi","edu","seed")
-    df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
+    #x = data['x']
+    #y = data['y']
+    #case_no = data['case_no']
+    df = pd.read_csv(file.file)
+    file.file.close
+    #print(df.head())
     power_analysis=TTestIndPower()
     #  results=pd.DataFrame({'Effect Size':[np.nan],'Samples':[np.nan],'Power':[np.nan]})
-    x='A'
-    y='NA'
-    case_no=0
+    #x='T'
+    #y='NT'
+    case_no=1
     treatment_arr=[]
     control_arr=[]
     treatment_locs=np.where((df['Intervention']==x))
     control_locs=np.where((df['Intervention']==y))
+    print("Length of Control locs",end=" ")
+    print(control_locs)
     for i in treatment_locs:
         treatment_arr.append(df['treatment_outcomes'].iloc[i])
     for j in control_locs:
         control_arr.append(df['treatment_outcomes'].iloc[j])
+    #print(treatment_arr[0])
+    print("The elements in the control array",end=" ")
+    print(control_arr[0])
     l1 = len(treatment_arr[0])
     l2 = len(control_arr[0])
+    print("Elements in Treatment Array",end=" ")
+    print(l1)
+    print("Elements in Control Array",end="  ")
+    print(l2)
     index_treatment=np.arange(0,l1)
     index_control=np.arange(0,l2)
     treatment_df=pd.DataFrame({'idx':index_treatment,"Treatment":treatment_arr[0]})
@@ -229,7 +241,8 @@ async def statspower(file:UploadFile):
     s = np.sqrt(((l1 - 1) * std1 + (l2 - 1) * std2) / (l1 + l2 - 2))
     d = (mu1 - mu2) / s #cohen's effect size
     effect = round(d,2)
-    #  print(effect)
+    #print(s)
+    #print(effect)
     sample_size=power_analysis.solve_power(effect_size=effect,alpha=0.05,power=0.8,alternative='two-sided')
     #power_analysis.solve_power()
     power=power_analysis.power(effect_size=effect,alpha=0.05,nobs1=l1,ratio=(l1/l2),alternative='two-sided')
@@ -245,11 +258,13 @@ async def statspower(file:UploadFile):
     print('The required sample size =',sample_size)
     print('The current statistical power is',power)
     
-    graph = power_analysis.plot_power(dep_var='nobs',nobs=np.arange(5, sample_size),
+    """graph = power_analysis.plot_power(dep_var='nobs',nobs=np.arange(5, sample_size),
                               effect_size=np.array([effect-(0.2*effect), effect,effect+(0.2*effect)]),
-                              alpha=0.05)
-    return case_no,t,c,effect,sample_size,power
+                              alpha=0.05)"""
+    print(sample_size)
+    #return {"message":f"Sample Size:{sample_size},Power:{power}"}
     #  return a,b,c,d,e,f
+    return{"Sample Size":sample_size,"Power":power}
  except Exception as ex:
    print(ex) 
 

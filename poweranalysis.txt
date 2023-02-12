@@ -1,8 +1,10 @@
-"""from pydantic import BaseModel
-class power_analysis(BaseModel):
+from pydantic import BaseModel
+
+class poweranalysis(BaseModel):
     x: str
     y: str
-    case_no: int"""
+    case_no: int
+    message:str
 
 # /*
 
