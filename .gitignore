@@ -158,6 +158,8 @@ TB_RiskDataset.ipynb
 TB_Test_Ntbk.ipynb
 TB_testing1.ipynb
 data (2).csv
+requirements2.txt
+requirements3.txt
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
