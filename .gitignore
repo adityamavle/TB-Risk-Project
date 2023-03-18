@@ -127,7 +127,7 @@ ENV/
 env.bak/
 venv.bak/
 tb_venv/
-
+tb_env/
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -160,6 +160,7 @@ TB_testing1.ipynb
 data (2).csv
 requirements2.txt
 requirements3.txt
+Calculating_Clinical_Data_Updated.ipynb
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
