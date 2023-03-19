@@ -396,13 +396,13 @@ def calculate_power1(x, y, df):
 #@app.post('/check_samp_sizes')
 def check_sample_sizes(dfx):
   sample_sizes={}
-  sample_sizes['Alcohol']=calculate_power('A','NAlc',dfx)
-  sample_sizes['Depression']=calculate_power('D','ND',dfx)  
-  sample_sizes['Tobacco']=calculate_power('T','NT',dfx)  
-  sample_sizes['Alcohol-Depression']=calculate_power('AD','NAD',dfx)  
-  sample_sizes['Alcohol-Tobacco']=calculate_power('AT','NAT',dfx)  
-  sample_sizes['Depression-Tobacco']=calculate_power('DT','NDT',dfx) 
-  sample_sizes['Alcohol-Depression-Tobacco']=calculate_power('ADT','NADT',dfx) 
+  sample_sizes['Alcohol']=calculate_power1('A','NAlc',dfx)
+  sample_sizes['Depression']=calculate_power1('D','ND',dfx)  
+  sample_sizes['Tobacco']=calculate_power1('T','NT',dfx)  
+  sample_sizes['Alcohol-Depression']=calculate_power1('AD','NAD',dfx)  
+  sample_sizes['Alcohol-Tobacco']=calculate_power1('AT','NAT',dfx)  
+  sample_sizes['Depression-Tobacco']=calculate_power1('DT','NDT',dfx) 
+  sample_sizes['Alcohol-Depression-Tobacco']=calculate_power1('ADT','NADT',dfx) 
   #for i in sample_sizes.values():
   all_above_threshold = all(value >= 0.8 for value in sample_sizes.values())
   print(all_above_threshold)
@@ -422,7 +422,11 @@ def try_sample_sizes3(dfx):
 
     size = dfx.shape[0]
     #total_power = sum(sample_sizes.values())
+    print(sample_sizes.values())
     all_above_threshold = all(value >= 0.79 for value in sample_sizes.values())
+    print(all_above_threshold)
+    #print(type(dfx))
+    print(type(dfx.shape[0]))
     if not all_above_threshold:
         if sample_sizes['Alcohol'] < 0.79:
             size += 100
@@ -447,9 +451,12 @@ def try_sample_sizes3(dfx):
         ratio_dt = round(dfx['Intervention'].value_counts(normalize=True)['DT']+dfx['Intervention'].value_counts(normalize=True)['NDT'],2)
         ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
         
+        #print(dfx['Intervention'].value_counts(normalize=True))
+        print(dfx.shape[0])
         #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
+        print('inside growing')
         dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
-        return try_sample_sizes3(dfx)
+        dfx = try_sample_sizes3(dfx)
     while all(value > 0.85 for value in sample_sizes.values()):
             print('inside shrinking')
                 #for group in sample_sizes.keys:
@@ -471,10 +478,22 @@ def try_sample_sizes3(dfx):
                 
             dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
             #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
-            return try_sample_sizes3(dfx)
+            dfx = try_sample_sizes3(dfx)
     return dfx
 
 @app.post('/try_samp_sizes')
+def process_file(file:UploadFile = File(...)):
+  try:
+      dfx=pd.read_csv(file.file)
+      dfx1 = try_sample_sizes3(dfx)
+      #csvx = dfx.to_csv(index = False)    
+      return StreamingResponse(
+                    iter([dfx1.to_csv(index=False)]),
+                    media_type="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=resim_screening.csv"})
+  except Exception as ex:
+      print(ex)
+
 def try_sample_sizes4(file:UploadFile=File(...)):
     try:
         dfx = pd.read_csv(file.file)
