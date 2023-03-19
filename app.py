@@ -11,10 +11,11 @@ from collections import Counter
 from fastapi import FastAPI
 from simulation import simulation
 #from power_analysis import power_analysis
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse,HTMLResponse
 from fastapi import FastAPI, UploadFile,File
 from pydantic import BaseModel
 import io 
+import requests
 #from flask import Flask, request
 app = FastAPI()
 
@@ -325,7 +326,7 @@ def create_dataset(size,percentage_alc_only, percentage_dep_only, percentage_tob
   #list_i = list(np.where((df['Intervention'] == 'A') | (df['Intervention'] == 'D') | (df['Intervention'] == 'T') | (df['Intervention'] == 'AD') | (df['Intervention'] == 'AT') | (df['Intervention'] == 'DT') | (df['Intervention'] == 'ADT'))[0])
   #values_i = np.random.choice(2,len(list_i),p=[1-treatment_intervention,treatment_intervention])
   #for i in range(len(list_i)):
-   # df.loc[list_i[i],"treatment_outcomes"] = values_i[i]
+  # df.loc[list_i[i],"treatment_outcomes"] = values_i[i]
   
   list_single_inter=list(np.where((df['Intervention'] == 'A') | (df['Intervention'] == 'D') | (df['Intervention'] == 'T'))[0])
   s_int=(1-treatment_1_conditions)/2
@@ -411,6 +412,7 @@ def calculate_power1(x, y, df):
 
 @app.post('/check_power')
 async def checks_power(file:UploadFile=File(...)):
+    ''' Calculates the power for each risk factor group in the population '''
     try:
         dfx = pd.read_csv(file.file)
         file.file.close
@@ -431,6 +433,17 @@ async def checks_power(file:UploadFile=File(...)):
       print(ex) 
 # ch
 # eck_sample_sizes(df_2)
+
+@app.get("/find_ideal_samples", response_class=HTMLResponse)
+async def get_links():
+    urls = [
+    "https://colab.research.google.com/drive/1CUXdWtmOlpdMTCxPU-l-p80N2H4K-KFh?usp=sharing",
+    "https://drive.google.com/drive/folders/1AsRdkL3UpydRKNGkUqwth0yZia4P9_1K?usp=sharing",
+    ]
+    website_contents = ""
+    for url in urls:
+        website_contents += f"<a href='{url}' style='color: blue;'>{url}</a><br><br>"
+    return website_contents
 
 def try_sample_sizes3(dfx):
     sample_sizes = {}
@@ -503,7 +516,7 @@ def try_sample_sizes3(dfx):
             dfx = try_sample_sizes3(dfx)
     return dfx
 
-@app.post('/try_samp_sizes')
+#@app.post('/try_samp_sizes')
 def process_file(file:UploadFile = File(...)):
   try:
       dfx=pd.read_csv(file.file)
@@ -595,6 +608,7 @@ def try_sample_sizes4(file:UploadFile=File(...)):
 
 @app.post('/clinical_dataset')
 async def clinical_ss(file:UploadFile=File(...)):
+    ''' Brings the power of each subgroup in the dataset close to 80% by tweaking their sizes.'''
     try:
         #def create_clinical_tb(dfx):
     # Get desired counts for each intervention group
