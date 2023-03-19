@@ -33,8 +33,8 @@ def create_dataset2(data:simulation):
   3.percentage_alcoholism_depression(and other dual variable overlaps)= Percentage of the overlap of respective two condtions in the populations
   4.percentage_tobacco_alcoholism_depression= Percentage of the overlap of all 3 cases in the population
   5.age, gender, bmi, edu: A list consisting of the percentages of distribution in the various categorical buckets for the following variables:
-  eg; age=[0.3,0.4,0.3] 
-  age:3 buckets; gender: 2 buckets; bmi: 3 buckets; edu: 4 buckets
+  eg; age=[18,60,35,15]:min,max,mean,std dev 
+  age:4 elements; gender: 2 buckets; bmi: 3 buckets; edu: 4 buckets
   6.Treatment_noth/treatment_1_conditions=The percentage of good treatment outcomes for the population with the following number of conditions
   """
   print(type(data.dict))
@@ -448,18 +448,19 @@ def try_sample_sizes3(dfx):
         ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
         
         #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
-        dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
+        dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
         return try_sample_sizes3(dfx)
-    for group in sample_sizes.keys():
-        print('inside shrinking')
-        while all(value > 0.85 for value in sample_sizes.values()):
-            if sample_sizes[group] > 0.95:
-                if size<30000:
-                  size -= 1500
-                else:
-                  size-=1000
-            #if any(value < 0.80 for value in sample_sizes.values()):
-            
+    while all(value > 0.85 for value in sample_sizes.values()):
+            print('inside shrinking')
+                #for group in sample_sizes.keys:
+                    #if sample_sizes[group] > 0.95:
+                    #   size -= 1500
+            if sample_sizes['Alcohol'] > 0.95:
+                size -= 1500 
+            elif sample_sizes['Tobacco'] > 0.95:
+                size -= 1500
+            elif sample_sizes['Depression'] > 0.95:
+                size -= 1500
             ratio_alc_only = round(dfx['Intervention'].value_counts(normalize=True)['A']+dfx['Intervention'].value_counts(normalize=True)['NAlc'],2)
             ratio_dep_only = round(dfx['Intervention'].value_counts(normalize=True)['D']+dfx['Intervention'].value_counts(normalize=True)['ND'],2)
             ratio_tob_only = round(dfx['Intervention'].value_counts(normalize=True)['T']+dfx['Intervention'].value_counts(normalize=True)['NT'],2)
@@ -468,7 +469,7 @@ def try_sample_sizes3(dfx):
             ratio_dt = round(dfx['Intervention'].value_counts(normalize=True)['DT']+dfx['Intervention'].value_counts(normalize=True)['NDT'],2)
             ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
                 
-            dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
+            dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
             #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
             return try_sample_sizes3(dfx)
     return dfx
@@ -517,17 +518,20 @@ def try_sample_sizes4(file:UploadFile=File(...)):
             ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
             
             #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
-            dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52,age=[18,60,35,15])
+            dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52,age=[18,60,35,15])
             return try_sample_sizes3(dfx)
-        for group in sample_sizes.keys():
-          print('inside shrinking')
-          while all(value > 0.85 for value in sample_sizes.values()):
-                if sample_sizes[group] > 0.95:
-                    if size<30000:
-                      size -= 1500
-                    else:
-                      size -= 1000
-                #if any(value < 0.80 for value in sample_sizes.values()):
+        while all(value > 0.85 for value in sample_sizes.values()):
+                print('inside shrinking')
+                #for group in sample_sizes.keys:
+                    #if sample_sizes[group] > 0.95:
+                    #   size -= 1500
+                if sample_sizes['Alcohol'] > 0.95:
+                  size -= 1500 
+                elif sample_sizes['Tobacco'] > 0.95:
+                  size -= 1500
+                elif sample_sizes['Depression'] > 0.95:
+                  size -= 1500
+                    #if any(value < 0.80 for value in sample_sizes.values()):
                 
                 ratio_alc_only = round(dfx['Intervention'].value_counts(normalize=True)['A']+dfx['Intervention'].value_counts(normalize=True)['NAlc'],2)
                 ratio_dep_only = round(dfx['Intervention'].value_counts(normalize=True)['D']+dfx['Intervention'].value_counts(normalize=True)['ND'],2)
@@ -537,11 +541,11 @@ def try_sample_sizes4(file:UploadFile=File(...)):
                 ratio_dt = round(dfx['Intervention'].value_counts(normalize=True)['DT']+dfx['Intervention'].value_counts(normalize=True)['NDT'],2)
                 ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
                     
-                dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52,age=[18,60,35,15])
+                dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52,age=[18,60,35,15])
                 #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
                 return try_sample_sizes3(dfx)
         #return dfx
-          return StreamingResponse(
+        return StreamingResponse(
                     iter([dfx.to_csv(index=False)]),
                     media_type="text/csv",
                     headers={"Content-Disposition": f"attachment; filename=resim_screening.csv"})
