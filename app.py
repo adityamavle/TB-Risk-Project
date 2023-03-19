@@ -594,10 +594,12 @@ def try_sample_sizes4(file:UploadFile=File(...)):
       print(ex) 
 
 @app.post('/clinical_dataset')
-def clinical_ss(file:UploadFile=File(...)):
+async def clinical_ss(file:UploadFile=File(...)):
     try:
         #def create_clinical_tb(dfx):
     # Get desired counts for each intervention group
+        dfx = pd.read_csv(file.file)
+        file.file.close
         alc_only = round((dfx["Intervention"].value_counts()['A'] + dfx["Intervention"].value_counts()['NAlc'])/6)
         dep_only = round((dfx["Intervention"].value_counts()['D'] + dfx["Intervention"].value_counts()['ND'])/6)
         tob_only = round((dfx["Intervention"].value_counts()['T'] + dfx["Intervention"].value_counts()['NT'])/6)
@@ -687,11 +689,11 @@ def clinical_ss(file:UploadFile=File(...)):
         # Update Unaffected
         new = curr_unaff.sample(n=count)
         dfx = dfx.drop(curr_unaff.index.difference(new.index))
-
-        return {'Samples in Clinical Dataset':dfx.shape[0],'response':StreamingResponse(
-                    iter([dfx.to_csv(index=False)]),
-                    media_type="text/csv",
-                    headers={"Content-Disposition": f"attachment; filename=clinical_data_tb.csv"})}
+        size=str(dfx.shape[0])
+        print(size)
+        return StreamingResponse(iter([dfx.to_csv(index=False)]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=clinical_samples_dataset.csv","Clinical-Dataset-Sample-Size":size})
     except Exception as ex:
         print(ex)
 
