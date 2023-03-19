@@ -12,8 +12,17 @@ class simulation(BaseModel):
     treatment_1_conditions: float
     treatment_2_conditions: float
     treatment_3_conditions: float
-    gender: list[float]
-    bmi: list[float]
-    edu: list[float]
+    male: float
+    female : float
+    low_bmi:float
+    normal_bmi: float
+    high_bmi: float
+    l1_edu: float
+    l2_edu: float
+    l3_edu: float
+    l4_edu: float
+    min_age: int
+    max_age: int
+    mean_age: int
+    sd_age: int 
     seed: int
-    age: list[float]

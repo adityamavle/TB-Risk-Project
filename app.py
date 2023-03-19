@@ -52,12 +52,28 @@ def create_dataset2(data:simulation):
     treatment_1_conditions = data['treatment_1_conditions']
     treatment_2_conditions = data['treatment_2_conditions']
     treatment_3_conditions = data['treatment_3_conditions']
-    gender = data['gender']
-    bmi = data['bmi']
-    edu = data['edu']
-    seed = data['seed']
-    age = data['age']
-
+    male= data['male']
+    female=data['female'] 
+    low_bmi=data['low_bmi']
+    normal_bmi=data['normal_bmi'] 
+    high_bmi=data['high_bmi'] 
+    l1_edu=data['l1_edu']
+    l2_edu=data['l2_edu']
+    l3_edu=data['l3_edu']
+    l4_edu=data['l4_edu']
+    min_age=data['min_age']
+    max_age=data['max_age']
+    mean_age=data['mean_age']
+    sd_age=data['sd_age']
+    seed=data['seed']
+    gender=list()
+    bmi=list()
+    age=list()
+    edu=list()
+    gender.extend([male,female])
+    bmi.extend([low_bmi,normal_bmi,high_bmi])
+    edu.extend([l1_edu,l2_edu,l3_edu,l4_edu])
+    age.extend([min_age,max_age,mean_age,sd_age])
     zeros=1-(percentage_alc_only + percentage_dep_only  + percentage_tobacco_only + percentage_alc_dep + percentage_alc_tobacco + percentage_dep_tobacco + percentage_tobacco_alcoholism_depression)
     
     print("zeros:{}".format(zeros))
@@ -332,7 +348,7 @@ def create_dataset(size,percentage_alc_only, percentage_dep_only, percentage_tob
   return df
 
 
-@app.post('/calc_power')
+#@app.post('/calc_power')
 def calculate_power(x:str,y:str,file:UploadFile=File(...)):
     """ x = value of treatment variable (gives us idea of the population - NAlc, a, nt, t, adt, etc)
         y = value of control variable """
@@ -393,22 +409,28 @@ def calculate_power1(x, y, df):
     p = power_analysis.power(effect_size=eff,alpha=0.05,nobs1=l1,ratio=(l1/l2),alternative='two-sided')
     return p
 
-#@app.post('/check_samp_sizes')
-def check_sample_sizes(dfx):
-  sample_sizes={}
-  sample_sizes['Alcohol']=calculate_power1('A','NAlc',dfx)
-  sample_sizes['Depression']=calculate_power1('D','ND',dfx)  
-  sample_sizes['Tobacco']=calculate_power1('T','NT',dfx)  
-  sample_sizes['Alcohol-Depression']=calculate_power1('AD','NAD',dfx)  
-  sample_sizes['Alcohol-Tobacco']=calculate_power1('AT','NAT',dfx)  
-  sample_sizes['Depression-Tobacco']=calculate_power1('DT','NDT',dfx) 
-  sample_sizes['Alcohol-Depression-Tobacco']=calculate_power1('ADT','NADT',dfx) 
-  #for i in sample_sizes.values():
-  all_above_threshold = all(value >= 0.8 for value in sample_sizes.values())
-  print(all_above_threshold)
-  print(sample_sizes.values())
-  return sample_sizes.values
-# check_sample_sizes(df_2)
+@app.post('/check_power')
+async def checks_power(file:UploadFile=File(...)):
+    try:
+        dfx = pd.read_csv(file.file)
+        file.file.close
+        sample_sizes={}
+        sample_sizes['Alcohol']=calculate_power1('A','NAlc',dfx)
+        sample_sizes['Depression']=calculate_power1('D','ND',dfx)  
+        sample_sizes['Tobacco']=calculate_power1('T','NT',dfx)  
+        sample_sizes['Alcohol-Depression']=calculate_power1('AD','NAD',dfx)  
+        sample_sizes['Alcohol-Tobacco']=calculate_power1('AT','NAT',dfx)  
+        sample_sizes['Depression-Tobacco']=calculate_power1('DT','NDT',dfx) 
+        sample_sizes['Alcohol-Depression-Tobacco']=calculate_power1('ADT','NADT',dfx) 
+        #for i in sample_sizes.values():
+        all_above_threshold = all(value >= 0.8 for value in sample_sizes.values())
+        print(all_above_threshold)
+        print(sample_sizes.values())
+        return {'Current Power for groups':list(sample_sizes.items())}
+    except Exception as ex:
+      print(ex) 
+# ch
+# eck_sample_sizes(df_2)
 
 def try_sample_sizes3(dfx):
     sample_sizes = {}
@@ -574,35 +596,102 @@ def try_sample_sizes4(file:UploadFile=File(...)):
 @app.post('/clinical_dataset')
 def clinical_ss(file:UploadFile=File(...)):
     try:
-        dfx = pd.read_csv(file.file)
-        file.file.close
-        counts= dfx['Intervention'].value_counts()[1]
+        #def create_clinical_tb(dfx):
+    # Get desired counts for each intervention group
+        alc_only = round((dfx["Intervention"].value_counts()['A'] + dfx["Intervention"].value_counts()['NAlc'])/6)
+        dep_only = round((dfx["Intervention"].value_counts()['D'] + dfx["Intervention"].value_counts()['ND'])/6)
+        tob_only = round((dfx["Intervention"].value_counts()['T'] + dfx["Intervention"].value_counts()['NT'])/6)
+        alc_dep_only = round((dfx["Intervention"].value_counts()['AD'] + dfx["Intervention"].value_counts()['NAD'])/6)
+        alc_tob_only = round((dfx["Intervention"].value_counts()['AT'] + dfx["Intervention"].value_counts()['NAT'])/6)
+        dep_tob_only = round((dfx["Intervention"].value_counts()['DT'] + dfx["Intervention"].value_counts()['NDT'])/6)
+        alc_dep_tob_only = round((dfx["Intervention"].value_counts()['ADT'] + dfx["Intervention"].value_counts()['NADT'])/6)
+        #unaff = round((dfx["Intervention"].value_counts()['UNAFFECTED'])/3)
 
-        max_unaffected= dfx['Intervention'].value_counts()[0]
-        column_name = 'Intervention'
+        my_count = [alc_only, dep_only, tob_only, alc_dep_only, alc_tob_only, dep_tob_only, alc_dep_tob_only ]
+        count  = max(my_count)
+        # Get current counts for each intervention group
+        # curr_counts = dfx["Intervention"].value_counts()
+        curr_alc_only = dfx[dfx['Intervention'] == 'A']
+        curr_dep_only = dfx[dfx['Intervention'] == 'D']
+        curr_tob_only = dfx[dfx['Intervention'] == 'T']
+        curr_alc_dep_only = dfx[dfx['Intervention'] == 'AD']
+        curr_alc_tob_only = dfx[dfx['Intervention'] == 'AT']
+        curr_dep_tob_only = dfx[dfx['Intervention'] == 'DT']
+        curr_alc_dep_tob_only = dfx[dfx['Intervention'] == 'ADT']
 
-        condition = dfx[column_name] == 'UNAFFECTED'
-        selected_rows = dfx[condition]
+        curr_Nalc_only = dfx[dfx['Intervention'] == 'NAlc']
+        curr_Ndep_only = dfx[dfx['Intervention'] == 'ND']
+        curr_Ntob_only = dfx[dfx['Intervention'] == 'NT']
+        curr_Nalc_dep_only = dfx[dfx['Intervention'] == 'NAD']
+        curr_Nalc_tob_only = dfx[dfx['Intervention'] == 'NAT']
+        curr_Ndep_tob_only = dfx[dfx['Intervention'] == 'NDT']
+        curr_Nalc_dep_tob_only = dfx[dfx['Intervention'] == 'NADT']
 
-        new_value = 'unaffected'
-        count_to_reduce = max_unaffected - (max_unaffected-counts)
-        count_reduced = 0
+        curr_unaff = dfx[dfx['Intervention'] == 'UNAFFECTED']
 
-        for index, row in selected_rows.iterrows():
-            if count_reduced < count_to_reduce:
-                dfx.at[index, column_name] = new_value
-                count_reduced += 1
-            else:
-                break
-        condition = dfx['Intervention'] != 'UNAFFECTED'
-        clinical = dfx[condition]
 
-        clinical = clinical.dropna()
-        #return clinical
-        return StreamingResponse(
-                    iter([clinical.to_csv(index=False)]),
+        # Update Alcohol Only
+        new = curr_alc_only.sample(n=count)
+        dfx = dfx.drop(curr_alc_only.index.difference(new.index))
+
+        new = curr_Nalc_only.sample(n=count)
+        dfx = dfx.drop(curr_Nalc_only.index.difference(new.index))
+
+
+        # Update Depression Only
+        new = curr_dep_only.sample(n=count)
+        dfx = dfx.drop(curr_dep_only.index.difference(new.index))
+
+        new = curr_Ndep_only.sample(n=count)
+        dfx = dfx.drop(curr_Ndep_only.index.difference(new.index))
+
+
+        # Update Tobacco Only
+        new = curr_tob_only.sample(n=count)
+        dfx = dfx.drop(curr_tob_only.index.difference(new.index))
+
+        new = curr_Ntob_only.sample(n=count)
+        dfx = dfx.drop(curr_Ntob_only.index.difference(new.index))
+
+
+        # Update Alcohol-Depression Only
+        new = curr_alc_dep_only.sample(n=count)
+        dfx = dfx.drop(curr_alc_dep_only.index.difference(new.index))
+
+        new = curr_Nalc_dep_only.sample(n=count)
+        dfx = dfx.drop(curr_Nalc_dep_only.index.difference(new.index))
+
+
+        # Update Depression-Tobacco Only
+        new = curr_dep_tob_only.sample(n=count)
+        dfx = dfx.drop(curr_dep_tob_only.index.difference(new.index))
+
+        new = curr_Ndep_tob_only.sample(n=count)
+        dfx = dfx.drop(curr_Ndep_tob_only.index.difference(new.index))
+
+
+        # Update Alcohol-Tobacco Only
+        new = curr_alc_tob_only.sample(n=count)
+        dfx = dfx.drop(curr_alc_tob_only.index.difference(new.index))
+
+        new = curr_Nalc_tob_only.sample(n=count)
+        dfx = dfx.drop(curr_Nalc_tob_only.index.difference(new.index))
+
+        # Update Alcohol-Depression-Tobacco Only
+        new = curr_alc_dep_tob_only.sample(n=count)
+        dfx = dfx.drop(curr_alc_dep_tob_only.index.difference(new.index))
+
+        new = curr_Nalc_dep_tob_only.sample(n=count)
+        dfx = dfx.drop(curr_Nalc_dep_tob_only.index.difference(new.index))
+
+        # Update Unaffected
+        new = curr_unaff.sample(n=count)
+        dfx = dfx.drop(curr_unaff.index.difference(new.index))
+
+        return {'Samples in Clinical Dataset':dfx.shape[0],'response':StreamingResponse(
+                    iter([dfx.to_csv(index=False)]),
                     media_type="text/csv",
-                    headers={"Content-Disposition": f"attachment; filename=clinical_dataset.csv"})
+                    headers={"Content-Disposition": f"attachment; filename=clinical_data_tb.csv"})}
     except Exception as ex:
         print(ex)
 
