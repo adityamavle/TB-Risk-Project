@@ -13,7 +13,8 @@ from simulation import simulation
 from clinical import clinical
 #from power_analysis import power_analysis
 from fastapi.responses import StreamingResponse,HTMLResponse
-from fastapi import FastAPI, UploadFile,File
+
+from fastapi import FastAPI, UploadFile,File,Response
 from pydantic import BaseModel
 import io 
 import requests
@@ -103,7 +104,7 @@ def calculate_power3(x, y, df):
     p = power_analysis.power(effect_size=eff,alpha=0.05,nobs1=l1,ratio=(l1/l2),alternative='two-sided')
     return p
 
-def try_sample_size(df,prob_2_2_and_1_1,prob_3_3,prob_2_1,prob_3_2,prob_3_1,prob_1_0,prob_2_0,prob_3_0,male,
+def try_sample_size(df,prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,
     female,
     low_bmi,
     normal_bmi,
@@ -132,7 +133,7 @@ def try_sample_size(df,prob_2_2_and_1_1,prob_3_3,prob_2_1,prob_3_2,prob_3_1,prob
         elif sample_sizes['pmh'] < 0.80:
             size1 += 10
 
-        df = create_clinical_dataset1(prob_2_2_and_1_1,prob_3_3,prob_2_1,prob_3_2,prob_3_1,prob_1_0,prob_2_0,prob_3_0,male,
+        df = create_clinical_dataset1(prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,
                         female,
                         low_bmi,
                         normal_bmi,
@@ -148,7 +149,7 @@ def try_sample_size(df,prob_2_2_and_1_1,prob_3_3,prob_2_1,prob_3_2,prob_3_1,prob
                         mean_ttd,
                         std_ttd,size=size1)   #create dataset function
         print(sample_sizes.values()) #check sample sizes
-        return try_sample_size(df,prob_2_2_and_1_1,prob_3_3,prob_2_1,prob_3_2,prob_3_1,prob_1_0,prob_2_0,prob_3_0,male,female,
+        return try_sample_size(df,prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,female,
     low_bmi,
     normal_bmi,
     high_bmi,
@@ -164,14 +165,14 @@ def try_sample_size(df,prob_2_2_and_1_1,prob_3_3,prob_2_1,prob_3_2,prob_3_1,prob
 
     return df
 
-def create_clinical_dataset1(prob_2_2_and_1_1: float,
-    prob_3_3: float,
-    prob_2_1: float,
-    prob_3_2: float,
-    prob_3_1: float,
-    prob_1_0: float,
-    prob_2_0: float,
-    prob_3_0: float,
+def create_clinical_dataset1(prob_2C_2I_and_1C_1I: float,
+    prob_3C_3I: float,
+    prob_2C_1I: float,
+    prob_3C_2I: float,
+    prob_3C_1I: float,
+    prob_1C_0I: float,
+    prob_2C_0I: float,
+    prob_3C_0I: float,
     male: float,
     female : float,
     low_bmi:float,
@@ -190,14 +191,14 @@ def create_clinical_dataset1(prob_2_2_and_1_1: float,
     size: int):
     #np.random.seed(200)
     # data= data.dict()
-    # prob_2_2_and_1_1 = data['prob_2_2_and_1_1']
-    # prob_3_3 = data['prob_3_3']
-    # prob_2_1 = data['prob_2_1']
-    # prob_3_2 = data['prob_3_2']
-    # prob_3_1 = data['prob_3_1']
-    # prob_1_0 = data['prob_1_0']
-    # prob_2_0 = data['prob_2_0']
-    # prob_3_0 = data['prob_3_0']
+    # prob_2C_2I_and_1C_1I = data['prob_2C_2I_and_1C_1I']
+    # prob_3C_3I = data['prob_3C_3I']
+    # prob_2C_1I = data['prob_2C_1I']
+    # prob_3C_2I = data['prob_3C_2I']
+    # prob_3C_1I = data['prob_3C_1I']
+    # prob_1C_0I = data['prob_1C_0I']
+    # prob_2C_0I = data['prob_2C_0I']
+    # prob_3C_0I = data['prob_3C_0I']
     # male= data['male']
     # female=data['female'] 
     # low_bmi=data['low_bmi']
@@ -258,42 +259,42 @@ def create_clinical_dataset1(prob_2_2_and_1_1: float,
     tuples_list = list(map(tuple, values_array))
     print(tuples_list)
     combinations_dict = {    
-                            (0, 1, 0):prob_1_0,
-                            (0, 2, 0):prob_2_2_and_1_1,
-                            (1, 0, 0):prob_1_0, 
-                        (1, 1, 0):prob_2_0, 
-                        (1, 2, 0):prob_2_1, 
-                        (2, 0, 0):prob_2_2_and_1_1, 
-                        (2, 1, 0):prob_2_1, 
-                        (2, 2, 0):prob_2_2_and_1_1, 
-                        (0, 0, 1):prob_1_0, 
-                        (0, 1, 1):prob_2_0,
-                        (0, 2, 1):prob_2_1,
-                        (1, 0, 1):prob_2_0 ,
-                        (1, 1, 1):prob_3_0,
-                        (1, 2, 1):prob_3_1 ,
-                        (2, 0, 1):prob_2_1 ,
-                        (2, 1, 1):prob_3_1,
-                        (2, 2, 1):prob_3_2 ,
-                        (0, 0, 2):prob_2_2_and_1_1, 
-                        (0, 1, 2):prob_2_1 ,
-                        (0, 2, 2):prob_2_2_and_1_1, 
-                        (1, 0, 2):prob_2_1, 
-                        (1, 1, 2):prob_3_1,
-                        (1, 2, 2):prob_3_2 ,
-                        (2, 0, 2):prob_2_2_and_1_1, 
-                        (2, 1, 2):prob_3_2 ,
-                        (2, 2, 2):prob_3_3,
+                            (0, 1, 0):prob_1C_0I,
+                            (0, 2, 0):prob_2C_2I_and_1C_1I,
+                            (1, 0, 0):prob_1C_0I, 
+                        (1, 1, 0):prob_2C_0I, 
+                        (1, 2, 0):prob_2C_1I, 
+                        (2, 0, 0):prob_2C_2I_and_1C_1I, 
+                        (2, 1, 0):prob_2C_1I, 
+                        (2, 2, 0):prob_2C_2I_and_1C_1I, 
+                        (0, 0, 1):prob_1C_0I, 
+                        (0, 1, 1):prob_2C_0I,
+                        (0, 2, 1):prob_2C_1I,
+                        (1, 0, 1):prob_2C_0I ,
+                        (1, 1, 1):prob_3C_0I,
+                        (1, 2, 1):prob_3C_1I ,
+                        (2, 0, 1):prob_2C_1I ,
+                        (2, 1, 1):prob_3C_1I,
+                        (2, 2, 1):prob_3C_2I ,
+                        (0, 0, 2):prob_2C_2I_and_1C_1I, 
+                        (0, 1, 2):prob_2C_1I ,
+                        (0, 2, 2):prob_2C_2I_and_1C_1I, 
+                        (1, 0, 2):prob_2C_1I, 
+                        (1, 1, 2):prob_3C_1I,
+                        (1, 2, 2):prob_3C_2I ,
+                        (2, 0, 2):prob_2C_2I_and_1C_1I, 
+                        (2, 1, 2):prob_3C_2I ,
+                        (2, 2, 2):prob_3C_3I,
                         }
     prob = list()
-    #prob_random = list()
+    prob_random = list()
     treatment_outcomes = np.empty(len(tuples_list))
     for i in range(len(tuples_list)):
         prob.append(combinations_dict.get(tuples_list[i]))
-        #prob_random.append(prob[i]+round(np.random.uniform(-0.02,0.02),4))
+        prob_random.append(prob[i]+round(np.random.uniform(-0.02,0.02),4))
         #print(Counter(prob_random))
-        #probability = prob_random[i]
-        probability = prob[i]
+        probability = prob_random[i]
+        #probability = prob[i]
         if np.isnan(probability):
             treatment_outcomes[i] = np.nan
         # otherwise, generate a random outcome based on the probability using np.random.choice
@@ -394,14 +395,14 @@ def create_clinical_dataset1(prob_2_2_and_1_1: float,
     return df
 
 @app.post('/simulate_clinical_dataset')
-def create_clinical_dataset(prob_2_2_and_1_1: float,
-    prob_3_3: float,
-    prob_2_1: float,
-    prob_3_2: float,
-    prob_3_1: float,
-    prob_1_0: float,
-    prob_2_0: float,
-    prob_3_0: float,
+def create_clinical_dataset(response:Response,prob_2C_2I_and_1C_1I: float,
+    prob_3C_3I: float,
+    prob_2C_1I: float,
+    prob_3C_2I: float,
+    prob_3C_1I: float,
+    prob_1C_0I: float,
+    prob_2C_0I: float,
+    prob_3C_0I: float,
     male: float,
     female : float,
     low_bmi:float,
@@ -418,16 +419,16 @@ def create_clinical_dataset(prob_2_2_and_1_1: float,
     mean_ttd : float,
     std_ttd : float,
     size: int):
-    #np.random.seed(200)
+    np.random.seed(200)
     # data= data.dict()
-    # prob_2_2_and_1_1 = data['prob_2_2_and_1_1']
-    # prob_3_3 = data['prob_3_3']
-    # prob_2_1 = data['prob_2_1']
-    # prob_3_2 = data['prob_3_2']
-    # prob_3_1 = data['prob_3_1']
-    # prob_1_0 = data['prob_1_0']
-    # prob_2_0 = data['prob_2_0']
-    # prob_3_0 = data['prob_3_0']
+    # prob_2C_2I_and_1C_1I = data['prob_2C_2I_and_1C_1I']
+    # prob_3C_3I = data['prob_3C_3I']
+    # prob_2C_1I = data['prob_2C_1I']
+    # prob_3C_2I = data['prob_3C_2I']
+    # prob_3C_1I = data['prob_3C_1I']
+    # prob_1C_0I = data['prob_1C_0I']
+    # prob_2C_0I = data['prob_2C_0I']
+    # prob_3C_0I = data['prob_3C_0I']
     # male= data['male']
     # female=data['female'] 
     # low_bmi=data['low_bmi']
@@ -488,42 +489,42 @@ def create_clinical_dataset(prob_2_2_and_1_1: float,
     tuples_list = list(map(tuple, values_array))
     print(tuples_list)
     combinations_dict = {    
-                            (0, 1, 0):prob_1_0,
-                            (0, 2, 0):prob_2_2_and_1_1,
-                            (1, 0, 0):prob_1_0, 
-                        (1, 1, 0):prob_2_0, 
-                        (1, 2, 0):prob_2_1, 
-                        (2, 0, 0):prob_2_2_and_1_1, 
-                        (2, 1, 0):prob_2_1, 
-                        (2, 2, 0):prob_2_2_and_1_1, 
-                        (0, 0, 1):prob_1_0, 
-                        (0, 1, 1):prob_2_0,
-                        (0, 2, 1):prob_2_1,
-                        (1, 0, 1):prob_2_0 ,
-                        (1, 1, 1):prob_3_0,
-                        (1, 2, 1):prob_3_1 ,
-                        (2, 0, 1):prob_2_1 ,
-                        (2, 1, 1):prob_3_1,
-                        (2, 2, 1):prob_3_2 ,
-                        (0, 0, 2):prob_2_2_and_1_1, 
-                        (0, 1, 2):prob_2_1 ,
-                        (0, 2, 2):prob_2_2_and_1_1, 
-                        (1, 0, 2):prob_2_1, 
-                        (1, 1, 2):prob_3_1,
-                        (1, 2, 2):prob_3_2 ,
-                        (2, 0, 2):prob_2_2_and_1_1, 
-                        (2, 1, 2):prob_3_2 ,
-                        (2, 2, 2):prob_3_3,
+                            (0, 1, 0):prob_1C_0I,
+                            (0, 2, 0):prob_2C_2I_and_1C_1I,
+                            (1, 0, 0):prob_1C_0I, 
+                        (1, 1, 0):prob_2C_0I, 
+                        (1, 2, 0):prob_2C_1I, 
+                        (2, 0, 0):prob_2C_2I_and_1C_1I, 
+                        (2, 1, 0):prob_2C_1I, 
+                        (2, 2, 0):prob_2C_2I_and_1C_1I, 
+                        (0, 0, 1):prob_1C_0I, 
+                        (0, 1, 1):prob_2C_0I,
+                        (0, 2, 1):prob_2C_1I,
+                        (1, 0, 1):prob_2C_0I ,
+                        (1, 1, 1):prob_3C_0I,
+                        (1, 2, 1):prob_3C_1I ,
+                        (2, 0, 1):prob_2C_1I ,
+                        (2, 1, 1):prob_3C_1I,
+                        (2, 2, 1):prob_3C_2I ,
+                        (0, 0, 2):prob_2C_2I_and_1C_1I, 
+                        (0, 1, 2):prob_2C_1I ,
+                        (0, 2, 2):prob_2C_2I_and_1C_1I, 
+                        (1, 0, 2):prob_2C_1I, 
+                        (1, 1, 2):prob_3C_1I,
+                        (1, 2, 2):prob_3C_2I ,
+                        (2, 0, 2):prob_2C_2I_and_1C_1I, 
+                        (2, 1, 2):prob_3C_2I ,
+                        (2, 2, 2):prob_3C_3I,
                         }
     prob = list()
-    #prob_random = list()
+    prob_random = list()
     treatment_outcomes = np.empty(len(tuples_list))
     for i in range(len(tuples_list)):
         prob.append(combinations_dict.get(tuples_list[i]))
-        #prob_random.append(prob[i]+round(np.random.uniform(-0.02,0.02),4))
+        prob_random.append(prob[i]+round(np.random.uniform(-0.02,0.02),4))
         #print(Counter(prob_random))
-        #probability = prob_random[i]
-        probability = prob[i]
+        probability = prob_random[i]
+        #probability = prob[i]
         if np.isnan(probability):
             treatment_outcomes[i] = np.nan
         # otherwise, generate a random outcome based on the probability using np.random.choice
@@ -620,7 +621,7 @@ def create_clinical_dataset(prob_2_2_and_1_1: float,
     
     df['treatment_mh'] = df['mh_inter'].apply(lambda x: np.random.choice([2, 1], p=[power_intervention_mh, 1-power_intervention_mh]) if x == 2 
                                                     else np.random.choice([2, 1], p=[power_control_mh, 1-power_control_mh]) if x == 1 else 0)
-    dfx = try_sample_size(df,prob_2_2_and_1_1,prob_3_3,prob_2_1,prob_3_2,prob_3_1,prob_1_0,prob_2_0,prob_3_0,male,
+    dfx = try_sample_size(df,prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,
                         female,
                         low_bmi,
                         normal_bmi,
@@ -635,10 +636,23 @@ def create_clinical_dataset(prob_2_2_and_1_1: float,
                         sd_age, 
                         mean_ttd,
                         std_ttd)
-    print(calculate_power1(2,1,dfx))
-    print(calculate_power2(2,1,dfx))
-    print(calculate_power3(2,1,dfx))
+    #size2 = dfx.shape[0]/26
+    #p1 = calculate_power1(2,1,dfx)
+    #p2 = calculate_power2(2,1,dfx)
+    #p3 = calculate_power3(2,1,dfx)
+    response.status_code = 200
+    
+    #response.content = f"The Power for the 3 Groups are: Smoking : {p1} ; Alcohol : {p2} ;Mental Health : {p3} "
+    response.content = 'Hello world'
+    size1 = str(dfx.shape[0]/26)
+    p1 = calculate_power1(2,1,dfx)
+    p2 = calculate_power2(2,1,dfx)
+    p3 = calculate_power3(2,1,dfx)
+    p1 = str(p1)
+    p2 = str(p2)
+    p3 = str(p3)
 
     return StreamingResponse(iter([dfx.to_csv(index=False)]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=clinical_samples_dataset.csv"})
+        headers={"Content-Disposition": f"attachment; filename=clinical_samples_dataset.csv",'power_smoking':p1,'power_alcohol':p2,
+        'power_mh':p3})
