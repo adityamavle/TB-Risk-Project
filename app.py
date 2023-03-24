@@ -127,11 +127,11 @@ def try_sample_size(df,prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,pro
     all_above_threshold = all(value >= 0.80 for value in sample_sizes.values())
     if not all_above_threshold:
         if sample_sizes['psmoke'] < 0.80:
-            size1 += 10
+            size1 += 5
         elif sample_sizes['palc'] < 0.80:
-            size1 += 10
+            size1 += 5
         elif sample_sizes['pmh'] < 0.80:
-            size1 += 10
+            size1 += 5
 
         df = create_clinical_dataset1(prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,
                         female,
