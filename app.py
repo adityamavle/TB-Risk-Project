@@ -10,14 +10,11 @@ from statsmodels.stats.power import TTestIndPower
 from collections import Counter
 from fastapi import FastAPI
 from simulation import simulation
-from clinical import clinical
 #from power_analysis import power_analysis
-from fastapi.responses import StreamingResponse,HTMLResponse
-
-from fastapi import FastAPI, UploadFile,File,Response
+from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, UploadFile,File
 from pydantic import BaseModel
 import io 
-import requests
 #from flask import Flask, request
 app = FastAPI()
 
@@ -26,42 +23,363 @@ app = FastAPI()
 def index():
     return {'message': 'Hello, World'}
 
-power_analysis=TTestIndPower()
+@app.post('/simulate_dataset')
+def dataset_simulation(data:simulation):
+  
+  """
+  This function simulates a dataset given a set of population parameters, description of population parameters are as given below.
+
+
+  User Defined Inputs:
+  1.size=Population Sample size
+  2.percentage_alcoholism/depression/tobacco=Percentage of the the respective condition in the population
+  3.percentage_alcoholism_depression(and other dual variable overlaps)= Percentage of the overlap of respective two condtions in the populations
+  4.percentage_tobacco_alcoholism_depression= Percentage of the overlap of all 3 cases in the population
+  5.age, gender, bmi, edu: A list consisting of the percentages of distribution in the various categorical buckets for the following variables:
+  eg; age=[18,60,35,15]:min,max,mean,std dev 
+  age:4 elements; gender: 2 buckets; bmi: 3 buckets; edu: 4 buckets
+  6.Treatment_noth/treatment_1_conditions=The percentage of good treatment outcomes for the population with the following number of conditions
+  """
+  print("Type is",type(data.dict))
+  try:
+    data= data.dict()
+    size = data['size']
+    percentage_alc_only = data['percentage_alc_only']
+    percentage_dep_only = data['percentage_dep_only'] 
+    percentage_tobacco_only = data['percentage_tobacco_only']
+    percentage_alc_dep = data['percentage_alc_dep']
+    percentage_alc_tobacco = data['percentage_alc_tobacco']
+    percentage_dep_tobacco = data['percentage_dep_tobacco'] 
+    percentage_tobacco_alcoholism_depression = data['percentage_tobacco_alcoholism_depression']
+    treatment_noth = data['treatment_noth']
+    treatment_1_conditions = data['treatment_1_conditions']
+    treatment_2_conditions = data['treatment_2_conditions']
+    treatment_3_conditions = data['treatment_3_conditions']
+    gender = data['gender']
+    bmi = data['bmi']
+    edu = data['edu']
+    seed = data['seed']
+    age = data['age']
+
+    zeros=1-(percentage_alc_only + percentage_dep_only  + percentage_tobacco_only + percentage_alc_dep + percentage_alc_tobacco + percentage_dep_tobacco + percentage_tobacco_alcoholism_depression)
+    
+    print("zeros:{}".format(zeros))
+    np.random.seed(2020)
+    condition=np.random.choice(8,size,p=[zeros, percentage_alc_only, percentage_dep_only,percentage_alc_dep,percentage_tobacco_only,percentage_alc_tobacco, percentage_dep_tobacco, percentage_tobacco_alcoholism_depression])
+    alcoholism=np.where((condition == 1) | (condition==3) | (condition==5) | (condition==7),1,0)
+    depression=np.where((condition == 2) | (condition==3) | (condition==6) | (condition==7),1,0)
+    
+    alc_only=np.where(condition == 1,1,0)
+    dep_only=np.where(condition == 2,1,0)
+    tobacco_only=np.where(condition == 4,1,0)
+
+    alc_dep=np.where(condition == 3,1,0)
+    alc_tobacco=np.where(condition == 5,1,0)
+    dep_tobacco=np.where(condition == 6,1,0)
+
+    tobacco=np.where((condition == 4) | (condition==5) | (condition==6) | (condition==7),1,0)
+    all_three=np.where(condition == 7,1,0)
+    age_1= np.random.normal(loc=age[2], scale=age[3], size=size)
+    age_1=np.clip(age_1, a_min=age[0], a_max=age[1])
+    age_1 = np.round(age_1).astype(int)
+    sex=np.random.choice(2,size,p=[gender[0],gender[1]])
+    body_mass=np.random.choice(3,size,p=[bmi[0],bmi[1],bmi[2]])
+    education=np.random.choice(4,size,p=[edu[0],edu[1],edu[2],edu[3]])
+    cavitation = np.random.choice(2,size,p=[0.5,0.5])
+    ttd = np.random.normal(loc=7, scale=3, size=size)
+    df = pd.DataFrame(
+      {
+          'idx': np.arange(1, size+1),
+          'age': age_1,
+          'gender': sex,
+          'bmi': body_mass,
+          'education': education,
+          'cavitation': cavitation,
+          'TTD': ttd,
+          'alcoholism': alcoholism,
+          'depression': depression,
+          'tobacco': tobacco,
+          'alcohol_only':alc_only,
+          'depression_only':dep_only,
+          'tobacco_only': tobacco_only,
+          'alcoholism+depression':alc_dep,
+          'alcoholism+tobacco':alc_tobacco,
+          'depression+tobacco':dep_tobacco,
+          'tobacco+alcohol+smoking':all_three
+      }
+    )
+    intervention_arr=[]
+    choices_alc_only=['NAlc','A']
+    choices_dep_only=['ND','D']
+    choices_tobacco_only=['NT','T']
+    choices_alc_dep_only=['NAD','AD']
+    choices_alc_tobacco_only=['NAT','AT']
+    choices_dep_tobacco_only=['NDT','DT']
+    choices_all_3=['NADT','ADT']
+    random.seed(seed)
+    weights=[0.5,0.5]
+    for i in range(size):
+      if(df['alcohol_only'][i]==1):
+        #intervention_arr.append(np.random.binomial(1,0.5,size=1))
+        intervention_arr.append(random.choices(choices_alc_only,weights=weights)[0])
+      if(df['depression_only'][i]==1):
+        intervention_arr.append(random.choices(choices_dep_only,weights=weights)[0])
+      if(df['tobacco_only'][i]==1):
+        intervention_arr.append(random.choices(choices_tobacco_only,weights=weights)[0])
+      if(df['alcoholism+depression'][i]==1):
+        intervention_arr.append(random.choices(choices_alc_dep_only,weights=weights)[0])
+      if(df['alcoholism+tobacco'][i]==1):
+        intervention_arr.append(random.choices(choices_alc_tobacco_only,weights=weights)[0])
+      if(df['depression+tobacco'][i]==1):
+        intervention_arr.append(random.choices(choices_dep_tobacco_only,weights=weights)[0])
+      if(df['tobacco+alcohol+smoking'][i]==1):
+        intervention_arr.append(random.choices(choices_all_3,weights=weights)[0])
+      if(df['alcoholism'][i]==0 and df['depression'][i]==0 and df['tobacco'][i]==0):
+        intervention_arr.append('UNAFFECTED')
+    df['Intervention'] = intervention_arr
+    #print(np.unique(intervention_arr,return_councentage_ts=True))
+    df['treatment_outcomes'] = " "
+    treatment_outcomes_single_ni = []
+    treatment_outcomes_two_ni = []
+    treatment_outcomes_three_ni = []
+    treatment_outcomes_i = []
+    #treatment_outcomes_noth = []
+
+    list_noth = list(np.where(df['Intervention'] == 'UNAFFECTED')[0])
+    values_noth = np.random.choice(2,len(list_noth),p=[1-treatment_noth,treatment_noth])
+    for i in range(len(list_noth)):
+      df.loc[list_noth[i],"treatment_outcomes"] = values_noth[i]
+    
+    list_single_ni = list(np.where((df['Intervention'] == 'NAlc') | (df['Intervention'] == 'ND') | (df['Intervention'] == 'NT'))[0])
+    values_single_ni = np.random.choice(2,len(list_single_ni),p=[1-treatment_1_conditions,treatment_1_conditions])
+    for i in range(len(list_single_ni)):
+      df.loc[list_single_ni[i],"treatment_outcomes"] = values_single_ni[i]
+
+    list_two_ni = list(np.where((df['Intervention'] == 'NAD') | (df['Intervention'] == 'NDT') | (df['Intervention'] == 'NAT'))[0])
+    values_two_ni = np.random.choice(2,len(list_two_ni),p=[1-treatment_2_conditions,treatment_2_conditions])
+    for i in range(len(list_two_ni)):
+      df.loc[list_two_ni[i],"treatment_outcomes"] = values_two_ni[i]
+
+    list_three_ni = list(np.where(df['Intervention'] == 'NADT')[0])
+    values_three_ni = np.random.choice(2,len(list_three_ni),p=[1-treatment_3_conditions,treatment_3_conditions])
+    for i in range(len(list_three_ni)):
+      df.loc[list_three_ni[i],"treatment_outcomes"] = values_three_ni[i]    
+    list_single_inter=list(np.where((df['Intervention'] == 'A') | (df['Intervention'] == 'D') | (df['Intervention'] == 'T'))[0])
+    s_int=(1-treatment_1_conditions)/2
+    values_single_inter = np.random.choice(2,len(list_single_inter),p=[s_int,treatment_1_conditions+s_int])
+    for i in range(len(list_single_inter)):
+      df.loc[list_single_inter[i],"treatment_outcomes"] = values_single_inter[i]
+
+    list_double_inter=list(np.where((df['Intervention'] == 'AD') | (df['Intervention'] == 'DT') | (df['Intervention'] == 'AT'))[0])
+    d_int=(1-treatment_2_conditions)/2
+    values_double_inter = np.random.choice(2,len(list_double_inter),p=[d_int,treatment_2_conditions + d_int])
+    for i in range(len(list_double_inter)):
+      df.loc[list_double_inter[i],"treatment_outcomes"] = values_double_inter[i]
+
+    list_triple_inter=list(np.where((df['Intervention'] == 'ADT'))[0])
+    t_int = (1-treatment_3_conditions)/2
+    values_triple_inter = np.random.choice(2,len(list_triple_inter),p=[t_int,treatment_3_conditions+ t_int])
+    for i in range(len(list_triple_inter)):
+      df.loc[list_triple_inter[i],"treatment_outcomes"] = values_triple_inter[i]
+
+
+    return StreamingResponse(
+        iter([df.to_csv(index=False)]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=init_dataset.csv"})
+  except Exception as ex:
+    print(ex)
+
+def create_dataset(size,percentage_alc_only, percentage_dep_only, percentage_tobacco_only,percentage_alc_dep, percentage_alc_tobacco,percentage_dep_tobacco, 
+                    percentage_tobacco_alcoholism_depression,treatment_noth,treatment_1_conditions,treatment_2_conditions,treatment_3_conditions,
+                    gender,bmi,edu,seed,age):
+  """
+  User Defined Inputs:
+  1.size=Population Sample size
+  2.percentage_alcoholism/depression/tobacco=Percentage of the the respective condition in the population
+  3.percentage_alcoholism_depression(and other dual variable overlaps)= Percentage of the overlap of respective two condtions in the populations
+  4.percentage_tobacco_alcoholism_depression= Percentage of the overlap of all 3 cases in the population
+  5.gender, bmi, edu: A list consisting of the percentages of distribution in the various categorical buckets for the following variables:
+  eg;  
+  buckets; gender: 2 buckets; bmi: 3 buckets; edu: 4 buckets
+  6.age has 4 parameters - a_min, a_max, mean, std dev
+  6.Treatment_noth/treatment_1_conditions=The percentage of good treatment outcomes for the population with the following number of conditions
+  """
+  zeros=1-(percentage_alc_only + percentage_dep_only  + percentage_tobacco_only + percentage_alc_dep + percentage_alc_tobacco + percentage_dep_tobacco + percentage_tobacco_alcoholism_depression)
+  
+  print("zeros:{}".format(zeros))
+  np.random.seed(2020)
+  condition=np.random.choice(8,size,p=[zeros, percentage_alc_only, percentage_dep_only,percentage_alc_dep,percentage_tobacco_only,percentage_alc_tobacco, percentage_dep_tobacco, percentage_tobacco_alcoholism_depression])
+  alcoholism=np.where((condition == 1) | (condition==3) | (condition==5) | (condition==7),1,0)
+  depression=np.where((condition == 2) | (condition==3) | (condition==6) | (condition==7),1,0)
+  
+  alc_only=np.where(condition == 1,1,0)
+  dep_only=np.where(condition == 2,1,0)
+  tobacco_only=np.where(condition == 4,1,0)
+
+  alc_dep=np.where(condition == 3,1,0)
+  alc_tobacco=np.where(condition == 5,1,0)
+  dep_tobacco=np.where(condition == 6,1,0)
+
+  tobacco=np.where((condition == 4) | (condition==5) | (condition==6) | (condition==7),1,0)
+  all_three=np.where(condition == 7,1,0)
+  age_1= np.random.normal(loc=age[2], scale=age[3], size=size)
+  age_1=np.clip(age_1, a_min=age[0], a_max=age[1])
+  age_1 = np.round(age_1).astype(int)
+  sex=np.random.choice(2,size,p=[gender[0],gender[1]])
+  body_mass=np.random.choice(3,size,p=[bmi[0],bmi[1],bmi[2]])
+  education=np.random.choice(4,size,p=[edu[0],edu[1],edu[2],edu[3]])
+  cavitation = np.random.choice(2,size,p=[0.5,0.5])
+  ttd = np.random.normal(loc=7, scale=3, size=size)
+  df = pd.DataFrame(
+    {
+        'idx': np.arange(1, size+1),
+        'age': age_1,
+        'gender': sex,
+        'bmi': body_mass,
+        'education': education,
+        'cavitation': cavitation,
+      	'TTD': ttd,
+        'alcoholism': alcoholism,
+        'depression': depression,
+        'tobacco': tobacco,
+        'alcohol_only':alc_only,
+        'depression_only':dep_only,
+        'tobacco_only': tobacco_only,
+        'alcoholism+depression':alc_dep,
+        'alcoholism+tobacco':alc_tobacco,
+        'depression+tobacco':dep_tobacco,
+        'tobacco+alcohol+smoking':all_three
+     }
+  )
+  intervention_arr=[]
+  choices_alc_only=['NAlc','A']
+  choices_dep_only=['ND','D']
+  choices_tobacco_only=['NT','T']
+  choices_alc_dep_only=['NAD','AD']
+  choices_alc_tobacco_only=['NAT','AT']
+  choices_dep_tobacco_only=['NDT','DT']
+  choices_all_3=['NADT','ADT']
+  random.seed(seed)
+  weights=[0.5,0.5]
+  for i in range(size):
+    if(df['alcohol_only'][i]==1):
+      #intervention_arr.append(np.random.binomial(1,0.5,size=1))
+      intervention_arr.append(random.choices(choices_alc_only,weights=weights)[0])
+    if(df['depression_only'][i]==1):
+      intervention_arr.append(random.choices(choices_dep_only,weights=weights)[0])
+    if(df['tobacco_only'][i]==1):
+      intervention_arr.append(random.choices(choices_tobacco_only,weights=weights)[0])
+    if(df['alcoholism+depression'][i]==1):
+      intervention_arr.append(random.choices(choices_alc_dep_only,weights=weights)[0])
+    if(df['alcoholism+tobacco'][i]==1):
+      intervention_arr.append(random.choices(choices_alc_tobacco_only,weights=weights)[0])
+    if(df['depression+tobacco'][i]==1):
+      intervention_arr.append(random.choices(choices_dep_tobacco_only,weights=weights)[0])
+    if(df['tobacco+alcohol+smoking'][i]==1):
+      intervention_arr.append(random.choices(choices_all_3,weights=weights)[0])
+    if(df['alcoholism'][i]==0 and df['depression'][i]==0 and df['tobacco'][i]==0):
+      intervention_arr.append('UNAFFECTED')
+  df['Intervention'] = intervention_arr
+  #print(np.unique(intervention_arr,return_councentage_ts=True))
+  df['treatment_outcomes'] = " "
+  treatment_outcomes_single_ni = []
+  treatment_outcomes_two_ni = []
+  treatment_outcomes_three_ni = []
+  treatment_outcomes_i = []
+  #treatment_outcomes_noth = []
+
+  list_noth = list(np.where(df['Intervention'] == 'UNAFFECTED')[0])
+  values_noth = np.random.choice(2,len(list_noth),p=[1-treatment_noth,treatment_noth])
+  for i in range(len(list_noth)):
+    df.loc[list_noth[i],"treatment_outcomes"] = values_noth[i]
+  
+  list_single_ni = list(np.where((df['Intervention'] == 'NAlc') | (df['Intervention'] == 'ND') | (df['Intervention'] == 'NT'))[0])
+  values_single_ni = np.random.choice(2,len(list_single_ni),p=[1-treatment_1_conditions,treatment_1_conditions])
+  for i in range(len(list_single_ni)):
+    df.loc[list_single_ni[i],"treatment_outcomes"] = values_single_ni[i]
+
+  list_two_ni = list(np.where((df['Intervention'] == 'NAD') | (df['Intervention'] == 'NDT') | (df['Intervention'] == 'NAT'))[0])
+  values_two_ni = np.random.choice(2,len(list_two_ni),p=[1-treatment_2_conditions,treatment_2_conditions])
+  for i in range(len(list_two_ni)):
+    df.loc[list_two_ni[i],"treatment_outcomes"] = values_two_ni[i]
+
+  list_three_ni = list(np.where(df['Intervention'] == 'NADT')[0])
+  values_three_ni = np.random.choice(2,len(list_three_ni),p=[1-treatment_3_conditions,treatment_3_conditions])
+  for i in range(len(list_three_ni)):
+    df.loc[list_three_ni[i],"treatment_outcomes"] = values_three_ni[i]
+
+  #list_i = list(np.where((df['Intervention'] == 'A') | (df['Intervention'] == 'D') | (df['Intervention'] == 'T') | (df['Intervention'] == 'AD') | (df['Intervention'] == 'AT') | (df['Intervention'] == 'DT') | (df['Intervention'] == 'ADT'))[0])
+  #values_i = np.random.choice(2,len(list_i),p=[1-treatment_intervention,treatment_intervention])
+  #for i in range(len(list_i)):
+   # df.loc[list_i[i],"treatment_outcomes"] = values_i[i]
+  
+  list_single_inter=list(np.where((df['Intervention'] == 'A') | (df['Intervention'] == 'D') | (df['Intervention'] == 'T'))[0])
+  s_int=(1-treatment_1_conditions)/2
+  values_single_inter = np.random.choice(2,len(list_single_inter),p=[s_int,treatment_1_conditions+s_int])
+  for i in range(len(list_single_inter)):
+    df.loc[list_single_inter[i],"treatment_outcomes"] = values_single_inter[i]
+
+  list_double_inter=list(np.where((df['Intervention'] == 'AD') | (df['Intervention'] == 'DT') | (df['Intervention'] == 'AT'))[0])
+  d_int=(1-treatment_2_conditions)/2
+  values_double_inter = np.random.choice(2,len(list_double_inter),p=[d_int,treatment_2_conditions + d_int])
+  for i in range(len(list_double_inter)):
+    df.loc[list_double_inter[i],"treatment_outcomes"] = values_double_inter[i]
+
+  list_triple_inter=list(np.where((df['Intervention'] == 'ADT'))[0])
+  t_int = (1-treatment_3_conditions)/2
+  values_triple_inter = np.random.choice(2,len(list_triple_inter),p=[t_int,treatment_3_conditions+ t_int])
+  for i in range(len(list_triple_inter)):
+    df.loc[list_triple_inter[i],"treatment_outcomes"] = values_triple_inter[i]
+
+  return df
+
+
+@app.post('/calc_power')
+def calculate_statistical_power(x:str,y:str,file:UploadFile=File(...)):
+    """ x = value of treatment variable (gives us idea of the population - NAlc, a, nt, t, adt, etc)
+        y = value of control variable """
+    try:
+        df = pd.read_csv(file.file)
+        file.file.close
+        #print(df.head())
+        power_analysis=TTestIndPower()
+        treatment_arr=[]
+        control_arr=[]
+        treatment_locs=np.where((df['Intervention']==x))
+        control_locs=np.where((df['Intervention']==y))
+        for i in treatment_locs:
+            treatment_arr.append(df['treatment_outcomes'].iloc[i])
+        for j in control_locs:
+            control_arr.append(df['treatment_outcomes'].iloc[j])
+        l1 = len(treatment_arr[0])
+        l2 = len(control_arr[0])
+        index_treatment=np.arange(0,l1)
+        index_control=np.arange(0,l2)
+        treatment_df=pd.DataFrame({'idx':index_treatment,"Treatment":treatment_arr[0]})
+        control_df=pd.DataFrame({'idx':index_control,"Control":control_arr[0]}) 
+        mu1=treatment_df['Treatment'].mean()
+        mu2=control_df['Control'].mean()
+        std1=treatment_df['Treatment'].std()
+        std2=control_df['Control'].std()
+        s = np.sqrt(((l1 - 1) * std1 + (l2 - 1) * std2) / (l1 + l2 - 2))
+        d = (mu1 - mu2) / s #cohen's effect size
+        eff = round(d,2)
+        p = power_analysis.power(effect_size=eff,alpha=0.05,nobs1=l1,ratio=(l1/l2),alternative='two-sided')
+        return p
+    except Exception as ex:
+      print(ex) 
+
 def calculate_power1(x, y, df):
     power_analysis=TTestIndPower()
     treatment_arr=[]
     control_arr=[]
-    treatment_locs=np.where((df['smoke_inter']==x))
-    control_locs=np.where((df['smoke_inter']==y))
+    treatment_locs=np.where((df['Intervention']==x))
+    control_locs=np.where((df['Intervention']==y))
     for i in treatment_locs:
-        treatment_arr.append(df['treatment_smoke'].iloc[i])
+        treatment_arr.append(df['treatment_outcomes'].iloc[i])
     for j in control_locs:
-        control_arr.append(df['treatment_smoke'].iloc[j])
-    l1 = len(treatment_arr[0])
-    l2 = len(control_arr[0])
-    index_treatment=np.arange(0,l1)
-    index_control=np.arange(0,l2)
-    treatment_df=pd.DataFrame({'idx':index_treatment,"Treatment":treatment_arr[0]})
-    control_df=pd.DataFrame({'idx':index_control,"Control":control_arr[0]}) 
-    mu1=treatment_df['Treatment'].mean()
-    mu2=control_df['Control'].mean()
-    std1=treatment_df['Treatment'].std()
-    std2=control_df['Control'].std()
-    s = np.sqrt(((l1 - 1) * std1 + (l2 - 1) * std2) / (l1 + l2 - 2))
-    d = (mu1 - mu2) / s #cohen's effect size
-    eff = round(d,2)
-    p = power_analysis.power(effect_size=eff,alpha=0.05,nobs1=l1,ratio=(l1/l2),alternative='two-sided')
-    return p
-def calculate_power2(x, y, df):
-    power_analysis=TTestIndPower()
-    treatment_arr=[]
-    control_arr=[]
-    treatment_locs=np.where((df['alc_inter']==x))
-    control_locs=np.where((df['alc_inter']==y))
-    for i in treatment_locs:
-        treatment_arr.append(df['treatment_alc'].iloc[i])
-    for j in control_locs:
-        control_arr.append(df['treatment_alc'].iloc[j])
+        control_arr.append(df['treatment_outcomes'].iloc[j])
     l1 = len(treatment_arr[0])
     l2 = len(control_arr[0])
     index_treatment=np.arange(0,l1)
@@ -78,581 +396,207 @@ def calculate_power2(x, y, df):
     p = power_analysis.power(effect_size=eff,alpha=0.05,nobs1=l1,ratio=(l1/l2),alternative='two-sided')
     return p
 
-def calculate_power3(x, y, df):
-    power_analysis=TTestIndPower()
-    treatment_arr=[]
-    control_arr=[]
-    treatment_locs=np.where((df['mh_inter']==x))
-    control_locs=np.where((df['mh_inter']==y))
-    for i in treatment_locs:
-        treatment_arr.append(df['treatment_mh'].iloc[i])
-    for j in control_locs:
-        control_arr.append(df['treatment_mh'].iloc[j])
-    l1 = len(treatment_arr[0])
-    l2 = len(control_arr[0])
-    index_treatment=np.arange(0,l1)
-    index_control=np.arange(0,l2)
-    treatment_df=pd.DataFrame({'idx':index_treatment,"Treatment":treatment_arr[0]})
-    control_df=pd.DataFrame({'idx':index_control,"Control":control_arr[0]}) 
-    mu1=treatment_df['Treatment'].mean()
-    mu2=control_df['Control'].mean()
-    std1=treatment_df['Treatment'].std()
-    std2=control_df['Control'].std()
-    s = np.sqrt(((l1 - 1) * std1 + (l2 - 1) * std2) / (l1 + l2 - 2))
-    d = (mu1 - mu2) / s #cohen's effect size
-    eff = round(d,2)
-    p = power_analysis.power(effect_size=eff,alpha=0.05,nobs1=l1,ratio=(l1/l2),alternative='two-sided')
-    return p
+#@app.post('/check_samp_sizes')
+def check_sample_sizes(dfx):
+  sample_sizes={}
+  sample_sizes['Alcohol']=calculate_power1('A','NAlc',dfx)
+  sample_sizes['Depression']=calculate_power1('D','ND',dfx)  
+  sample_sizes['Tobacco']=calculate_power1('T','NT',dfx)  
+  sample_sizes['Alcohol-Depression']=calculate_power1('AD','NAD',dfx)  
+  sample_sizes['Alcohol-Tobacco']=calculate_power1('AT','NAT',dfx)  
+  sample_sizes['Depression-Tobacco']=calculate_power1('DT','NDT',dfx) 
+  sample_sizes['Alcohol-Depression-Tobacco']=calculate_power1('ADT','NADT',dfx) 
+  #for i in sample_sizes.values():
+  all_above_threshold = all(value >= 0.8 for value in sample_sizes.values())
+  print(all_above_threshold)
+  print(sample_sizes.values())
+  return sample_sizes.values
+# check_sample_sizes(df_2)
 
-def try_sample_size(df,prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,
-    female,
-    low_bmi,
-    normal_bmi,
-    high_bmi,
-    l1_edu,
-    l2_edu,
-    l3_edu,
-    l4_edu,
-    min_age,
-    max_age,
-    mean_age,
-    sd_age, 
-    mean_ttd,std_ttd): 
+def try_sample_sizes3(dfx):
     sample_sizes = {}
-    sample_sizes['psmoke'] = calculate_power1(2, 1, df) #calculate power function
-    sample_sizes['palc'] = calculate_power2(2, 1, df)
-    sample_sizes['pmh'] = calculate_power3(2, 1, df)
+    sample_sizes['Alcohol'] = calculate_power1('A', 'NAlc', dfx)
+    sample_sizes['Depression'] = calculate_power1('D', 'ND', dfx)
+    sample_sizes['Tobacco'] = calculate_power1('T', 'NT', dfx)
+    sample_sizes['Alcohol-Depression'] = calculate_power1('AD', 'NAD', dfx)
+    sample_sizes['Alcohol-Tobacco'] = calculate_power1('AT', 'NAT', dfx)
+    sample_sizes['Depression-Tobacco'] = calculate_power1('DT', 'NDT', dfx)
+    sample_sizes['Alcohol-Depression-Tobacco'] = calculate_power1('ADT', 'NADT', dfx)
 
-    size1 = round(df.shape[0]/26)
-    all_above_threshold = all(value >= 0.80 for value in sample_sizes.values())
+    size = dfx.shape[0]
+    #total_power = sum(sample_sizes.values())
+    all_above_threshold = all(value >= 0.79 for value in sample_sizes.values())
     if not all_above_threshold:
-        if sample_sizes['psmoke'] < 0.80:
-            size1 += 5
-        elif sample_sizes['palc'] < 0.80:
-            size1 += 5
-        elif sample_sizes['pmh'] < 0.80:
-            size1 += 5
+        if sample_sizes['Alcohol'] < 0.79:
+            size += 100
+        elif sample_sizes['Depression'] < 0.79:
+            size += 100
+        elif sample_sizes['Tobacco'] < 0.79:
+            size += 100
+        elif sample_sizes['Alcohol-Depression'] < 0.79:
+            size += 80
+        elif sample_sizes['Alcohol-Tobacco'] < 0.79:
+            size += 80
+        elif sample_sizes['Depression-Tobacco'] < 0.79:
+            size += 80
+        elif sample_sizes['Alcohol-Depression-Tobacco'] < 0.79:
+            size += 20
+          
+        ratio_alc_only = round(dfx['Intervention'].value_counts(normalize=True)['A']+dfx['Intervention'].value_counts(normalize=True)['NAlc'],2)
+        ratio_dep_only = round(dfx['Intervention'].value_counts(normalize=True)['D']+dfx['Intervention'].value_counts(normalize=True)['ND'],2)
+        ratio_tob_only = round(dfx['Intervention'].value_counts(normalize=True)['T']+dfx['Intervention'].value_counts(normalize=True)['NT'],2)
+        ratio_at = round(dfx['Intervention'].value_counts(normalize=True)['AT']+dfx['Intervention'].value_counts(normalize=True)['NAT'],2)
+        ratio_ad = round(dfx['Intervention'].value_counts(normalize=True)['AD']+dfx['Intervention'].value_counts(normalize=True)['NAD'],2)
+        ratio_dt = round(dfx['Intervention'].value_counts(normalize=True)['DT']+dfx['Intervention'].value_counts(normalize=True)['NDT'],2)
+        ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
+        
+        #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
+        dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
+        return try_sample_sizes3(dfx)
+    while all(value > 0.85 for value in sample_sizes.values()):
+            print('inside shrinking')
+                #for group in sample_sizes.keys:
+                    #if sample_sizes[group] > 0.95:
+                    #   size -= 1500
+            if sample_sizes['Alcohol'] > 0.95:
+                size -= 1500 
+            elif sample_sizes['Tobacco'] > 0.95:
+                size -= 1500
+            elif sample_sizes['Depression'] > 0.95:
+                size -= 1500
+            ratio_alc_only = round(dfx['Intervention'].value_counts(normalize=True)['A']+dfx['Intervention'].value_counts(normalize=True)['NAlc'],2)
+            ratio_dep_only = round(dfx['Intervention'].value_counts(normalize=True)['D']+dfx['Intervention'].value_counts(normalize=True)['ND'],2)
+            ratio_tob_only = round(dfx['Intervention'].value_counts(normalize=True)['T']+dfx['Intervention'].value_counts(normalize=True)['NT'],2)
+            ratio_at = round(dfx['Intervention'].value_counts(normalize=True)['AT']+dfx['Intervention'].value_counts(normalize=True)['NAT'],2)
+            ratio_ad = round(dfx['Intervention'].value_counts(normalize=True)['AD']+dfx['Intervention'].value_counts(normalize=True)['NAD'],2)
+            ratio_dt = round(dfx['Intervention'].value_counts(normalize=True)['DT']+dfx['Intervention'].value_counts(normalize=True)['NDT'],2)
+            ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
+                
+            dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],age=[18,60,35,15],seed=52)
+            #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
+            return try_sample_sizes3(dfx)
+    return dfx
 
-        df = create_clinical_dataset1(prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,
-                        female,
-                        low_bmi,
-                        normal_bmi,
-                        high_bmi,
-                        l1_edu,
-                        l2_edu,
-                        l3_edu,
-                        l4_edu,
-                        min_age,
-                        max_age,
-                        mean_age,
-                        sd_age, 
-                        mean_ttd,
-                        std_ttd,size=size1)   #create dataset function
-        print(sample_sizes.values()) #check sample sizes
-        return try_sample_size(df,prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,female,
-    low_bmi,
-    normal_bmi,
-    high_bmi,
-    l1_edu,
-    l2_edu,
-    l3_edu,
-    l4_edu,
-    min_age,
-    max_age,
-    mean_age,
-    sd_age, 
-    mean_ttd,std_ttd)
+@app.post('/try_samp_sizes')
+def Optimize_sample_size(file:UploadFile=File(...)):
+    """
+    Accepts: Inital dataset csv file
+    Returns: Dataset with optimal power for the given sample size(Optimized sample size)
+    Employs a recursive resampling algorithm
+    """
+    try:
+        dfx = pd.read_csv(file.file)
+        file.file.close
+        #dfx = pd.read_csv(io.BytesIO(contents), encoding='utf-8')
+        #file.file.close
+        sample_sizes = {}
+        sample_sizes['Alcohol'] = calculate_power1('A', 'NAlc', dfx)
+        sample_sizes['Depression'] = calculate_power1('D', 'ND', dfx)
+        sample_sizes['Tobacco'] = calculate_power1('T', 'NT', dfx)
+        sample_sizes['Alcohol-Depression'] = calculate_power1('AD', 'NAD', dfx)
+        sample_sizes['Alcohol-Tobacco'] = calculate_power1('AT', 'NAT', dfx)
+        sample_sizes['Depression-Tobacco'] = calculate_power1('DT', 'NDT', dfx)
+        sample_sizes['Alcohol-Depression-Tobacco'] = calculate_power1('ADT', 'NADT', dfx)
 
-    return df
+        size = dfx.shape[0]
+        #total_power = sum(sample_sizes.values())
+        all_above_threshold = all(value >= 0.79 for value in sample_sizes.values())
+        if not all_above_threshold:
+            if sample_sizes['Alcohol'] < 0.79:
+                size += 100
+            elif sample_sizes['Depression'] < 0.79:
+                size += 100
+            elif sample_sizes['Tobacco'] < 0.79:
+                size += 100
+            elif sample_sizes['Alcohol-Depression'] < 0.79:
+                size += 80
+            elif sample_sizes['Alcohol-Tobacco'] < 0.79:
+                size += 80
+            elif sample_sizes['Depression-Tobacco'] < 0.79:
+                size += 80
+            elif sample_sizes['Alcohol-Depression-Tobacco'] < 0.79:
+                size += 20
+              
+            ratio_alc_only = round(dfx['Intervention'].value_counts(normalize=True)['A']+dfx['Intervention'].value_counts(normalize=True)['NAlc'],2)
+            ratio_dep_only = round(dfx['Intervention'].value_counts(normalize=True)['D']+dfx['Intervention'].value_counts(normalize=True)['ND'],2)
+            ratio_tob_only = round(dfx['Intervention'].value_counts(normalize=True)['T']+dfx['Intervention'].value_counts(normalize=True)['NT'],2)
+            ratio_at = round(dfx['Intervention'].value_counts(normalize=True)['AT']+dfx['Intervention'].value_counts(normalize=True)['NAT'],2)
+            ratio_ad = round(dfx['Intervention'].value_counts(normalize=True)['AD']+dfx['Intervention'].value_counts(normalize=True)['NAD'],2)
+            ratio_dt = round(dfx['Intervention'].value_counts(normalize=True)['DT']+dfx['Intervention'].value_counts(normalize=True)['NDT'],2)
+            ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
+            
+            #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
+            dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52,age=[18,60,35,15])
+            return try_sample_sizes3(dfx)
+        while all(value > 0.85 for value in sample_sizes.values()):
+                print('inside shrinking')
+                #for group in sample_sizes.keys:
+                    #if sample_sizes[group] > 0.95:
+                    #   size -= 1500
+                if sample_sizes['Alcohol'] > 0.95:
+                  size -= 1500 
+                elif sample_sizes['Tobacco'] > 0.95:
+                  size -= 1500
+                elif sample_sizes['Depression'] > 0.95:
+                  size -= 1500
+                    #if any(value < 0.80 for value in sample_sizes.values()):
+                
+                ratio_alc_only = round(dfx['Intervention'].value_counts(normalize=True)['A']+dfx['Intervention'].value_counts(normalize=True)['NAlc'],2)
+                ratio_dep_only = round(dfx['Intervention'].value_counts(normalize=True)['D']+dfx['Intervention'].value_counts(normalize=True)['ND'],2)
+                ratio_tob_only = round(dfx['Intervention'].value_counts(normalize=True)['T']+dfx['Intervention'].value_counts(normalize=True)['NT'],2)
+                ratio_at = round(dfx['Intervention'].value_counts(normalize=True)['AT']+dfx['Intervention'].value_counts(normalize=True)['NAT'],2)
+                ratio_ad = round(dfx['Intervention'].value_counts(normalize=True)['AD']+dfx['Intervention'].value_counts(normalize=True)['NAD'],2)
+                ratio_dt = round(dfx['Intervention'].value_counts(normalize=True)['DT']+dfx['Intervention'].value_counts(normalize=True)['NDT'],2)
+                ratio_adt = round(dfx['Intervention'].value_counts(normalize=True)['ADT']+dfx['Intervention'].value_counts(normalize=True)['NADT'],2)
+                    
+                dfx = create_dataset(size, ratio_alc_only, ratio_dep_only, ratio_tob_only, ratio_ad, ratio_at, ratio_dt, ratio_adt, 0.95, 0.90, 0.85, 0.80, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52,age=[18,60,35,15])
+                #dfx = create_dataset2(size, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.9, 0.80, 0.70, 0.60, gender=[0.5, 0.5], bmi=[0.2,0.5,0.3],edu=[0.1,0.2,0.2,0.5],seed=52)
+                return try_sample_sizes3(dfx)
+        #return dfx
+        return StreamingResponse(
+                    iter([dfx.to_csv(index=False)]),
+                    media_type="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=resim_screening.csv"})
+    except Exception as ex:
+      print(ex) 
 
-def create_clinical_dataset1(prob_2C_2I_and_1C_1I: float,
-    prob_3C_3I: float,
-    prob_2C_1I: float,
-    prob_3C_2I: float,
-    prob_3C_1I: float,
-    prob_1C_0I: float,
-    prob_2C_0I: float,
-    prob_3C_0I: float,
-    male: float,
-    female : float,
-    low_bmi:float,
-    normal_bmi: float,
-    high_bmi: float,
-    l1_edu: float,
-    l2_edu: float,
-    l3_edu: float,
-    l4_edu: float,
-    min_age: int,
-    max_age: int,
-    mean_age: int,
-    sd_age: int ,
-    mean_ttd : float,
-    std_ttd : float,
-    size: int):
-    #np.random.seed(200)
-    # data= data.dict()
-    # prob_2C_2I_and_1C_1I = data['prob_2C_2I_and_1C_1I']
-    # prob_3C_3I = data['prob_3C_3I']
-    # prob_2C_1I = data['prob_2C_1I']
-    # prob_3C_2I = data['prob_3C_2I']
-    # prob_3C_1I = data['prob_3C_1I']
-    # prob_1C_0I = data['prob_1C_0I']
-    # prob_2C_0I = data['prob_2C_0I']
-    # prob_3C_0I = data['prob_3C_0I']
-    # male= data['male']
-    # female=data['female'] 
-    # low_bmi=data['low_bmi']
-    # normal_bmi=data['normal_bmi'] 
-    # high_bmi=data['high_bmi'] 
-    # l1_edu=data['l1_edu']
-    # l2_edu=data['l2_edu']
-    # l3_edu=data['l3_edu']
-    # l4_edu=data['l4_edu']
-    # min_age=data['min_age']
-    # max_age=data['max_age']
-    # mean_age=data['mean_age']
-    # sd_age=data['sd_age']
-    # mean_ttd = data['mean_ttd']
-    # std_ttd = data['std_ttd']
-    # size = data['size']
-    gender=list()
-    bmi=list()
-    age=list()
-    edu=list()
-    ttd = list()
-    gender.extend([male,female])
-    bmi.extend([low_bmi,normal_bmi,high_bmi])
-    edu.extend([l1_edu,l2_edu,l3_edu,l4_edu])
-    age.extend([min_age,max_age,mean_age,sd_age])
-    ttd.extend([mean_ttd,std_ttd])
-    age_1 = np.random.normal(loc=age[2], scale=age[3], size=size*27)
-    age_1 = np.clip(age_1, a_min=age[0], a_max=age[1])
-    age_1 = np.round(age_1).astype(int)
-    sex = np.random.choice(2,size*27,p=[gender[0],gender[1]])
-    body_mass= np.random.choice(3,size*27,p=[bmi[0],bmi[1],bmi[2]])
-    education= np.random.choice(4,size*27,p=[edu[0],edu[1],edu[2],edu[3]])
-    cavitation = np.random.choice(2,size*27,p=[0.5,0.5])
-    ttd1 = np.random.normal(loc=ttd[0], scale=ttd[1],size=size*27)
-    alc_int = np.array([])
-    mh_int = np.array([])
-    smoking_int = np.array([])
-    values = [0, 1, 2] #0 NA 1:NO INTER 2:Intervention
-    combinations = np.array(np.meshgrid(*([values] * 3))).T.reshape(-1, 3)
-    for value in values:
-        if not any((combinations == value).all(axis=1)):
-            # If a value doesn't appear, add it to a random combination
-            i = np.random.randint(len(combinations))
-            j = np.random.randint(3)
-            combinations[i, j] = value
+@app.post('/clinical_dataset')
+def clinical_dataset(file:UploadFile=File(...)):
+    """
+    Function accepts an optimized sample size dataset and returns a clinical dataset consisting of equal number of samples from each population group.
+    """
+    try:
+        dfx = pd.read_csv(file.file)
+        file.file.close
+        counts= dfx['Intervention'].value_counts()[1]
 
-    #combinations = np.delete(combinations, 0, axis=0)
-    for i in range(len(combinations)):
-            alc_int = np.append(alc_int, np.tile(combinations[i, 0], size))
-            mh_int = np.append(mh_int, np.tile(combinations[i, 1], size))
-            smoking_int = np.append(smoking_int, np.tile(combinations[i, 2], size))
-            alc_int = alc_int.astype(int)
-            mh_int = mh_int.astype(int)
-            smoking_int = smoking_int.astype(int)
-    values_array = np.column_stack(((alc_int, mh_int, smoking_int)))
-    # filter out rows where all values are zero
-    values_array = values_array[~np.all(values_array == 0, axis=1)]
-    tuples_list = list(map(tuple, values_array))
-    print(tuples_list)
-    combinations_dict = {    
-                            (0, 1, 0):prob_1C_0I,
-                            (0, 2, 0):prob_2C_2I_and_1C_1I,
-                            (1, 0, 0):prob_1C_0I, 
-                        (1, 1, 0):prob_2C_0I, 
-                        (1, 2, 0):prob_2C_1I, 
-                        (2, 0, 0):prob_2C_2I_and_1C_1I, 
-                        (2, 1, 0):prob_2C_1I, 
-                        (2, 2, 0):prob_2C_2I_and_1C_1I, 
-                        (0, 0, 1):prob_1C_0I, 
-                        (0, 1, 1):prob_2C_0I,
-                        (0, 2, 1):prob_2C_1I,
-                        (1, 0, 1):prob_2C_0I ,
-                        (1, 1, 1):prob_3C_0I,
-                        (1, 2, 1):prob_3C_1I ,
-                        (2, 0, 1):prob_2C_1I ,
-                        (2, 1, 1):prob_3C_1I,
-                        (2, 2, 1):prob_3C_2I ,
-                        (0, 0, 2):prob_2C_2I_and_1C_1I, 
-                        (0, 1, 2):prob_2C_1I ,
-                        (0, 2, 2):prob_2C_2I_and_1C_1I, 
-                        (1, 0, 2):prob_2C_1I, 
-                        (1, 1, 2):prob_3C_1I,
-                        (1, 2, 2):prob_3C_2I ,
-                        (2, 0, 2):prob_2C_2I_and_1C_1I, 
-                        (2, 1, 2):prob_3C_2I ,
-                        (2, 2, 2):prob_3C_3I,
-                        }
-    prob = list()
-    prob_random = list()
-    treatment_outcomes = np.empty(len(tuples_list))
-    for i in range(len(tuples_list)):
-        prob.append(combinations_dict.get(tuples_list[i]))
-        prob_random.append(prob[i]+round(np.random.uniform(-0.02,0.02),4))
-        #print(Counter(prob_random))
-        probability = prob_random[i]
-        #probability = prob[i]
-        if np.isnan(probability):
-            treatment_outcomes[i] = np.nan
-        # otherwise, generate a random outcome based on the probability using np.random.choice
-        else:
-            if np.random.rand() < probability:
-                treatment_outcomes[i] = 1
+        max_unaffected= dfx['Intervention'].value_counts()[0]
+        column_name = 'Intervention'
+
+        condition = dfx[column_name] == 'UNAFFECTED'
+        selected_rows = dfx[condition]
+
+        new_value = 'unaffected'
+        count_to_reduce = max_unaffected - (max_unaffected-counts)
+        count_reduced = 0
+
+        for index, row in selected_rows.iterrows():
+            if count_reduced < count_to_reduce:
+                dfx.at[index, column_name] = new_value
+                count_reduced += 1
             else:
-                treatment_outcomes[i] = 0
+                break
+        condition = dfx['Intervention'] != 'UNAFFECTED'
+        clinical = dfx[condition]
 
-    treatment_outcomes = treatment_outcomes.astype(int)
-    df = pd.DataFrame({'alc_inter': alc_int, 'mh_inter': mh_int, 'smoke_inter': smoking_int,'age':age_1,'sex':sex,'bmi':body_mass,'education':education,'cavitation':cavitation,'ttd':ttd1})
-    df = df[~((df['alc_inter'] == 0) & (df['mh_inter'] == 0) & (df['smoke_inter'] == 0))]
-    df['treatment_outcomes'] = treatment_outcomes
-    df['alcohol'] = df['alc_inter'].apply(lambda x: 1 if x == 1 or x == 2 else 0)
-    df['mental_health'] = df['mh_inter'].apply(lambda x: 1 if x == 1 or x == 2 else 0)
-    df['smoking'] = df['smoke_inter'].apply(lambda x: 1 if x == 1 or x == 2 else 0)
-    df = df.sample(frac=1).reset_index(drop=True)
-    case1_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 2) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_1 = case1_1.get(1, 0)
-    case1_2 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 2) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_2 = case1_2.get(1, 0)
-    case1_3 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 1) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_3 = case1_3.get(1, 0)
-    case1_4 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 2) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_4 = case1_4.get(1, 0)
-    case1_5 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 1) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_5 = case1_5.get(1, 0)
-    case1_6 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 2) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_6 = case1_6.get(1, 0)
-    case1_7 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 1) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_7 = case1_7.get(1, 0)
-    case1_8 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 1) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_8 = case1_8.get(1, 0)
+        clinical = clinical.dropna()
+        #return clinical
+        return StreamingResponse(
+                    iter([clinical.to_csv(index=False)]),
+                    media_type="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=clinical_dataset.csv"})
+    except Exception as ex:
+        print(ex)
 
-    case2_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 2) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_1 = case2_1.get(1, 0)
-    case2_2 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 1) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_2 = case2_2.get(1, 0)
-    case2_3 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 2) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_3 = case2_3.get(1, 0)
-    case2_4 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 1) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_4 = case2_4.get(1, 0)
-
-    case3_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 0) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_1 = case3_1.get(1, 0)
-    case3_2 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 0) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_2 = case3_2.get(1, 0)
-    case3_3 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 0) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_3 = case3_3.get(1, 0)
-    case3_4 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 0) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_4 = case3_4.get(1, 0)
-
-    case4_1 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 2) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_1 = case4_1.get(1, 0)
-    case4_2 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 2) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_2 = case4_2.get(1, 0)
-    case4_3 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 1) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_3 = case4_3.get(1, 0)
-    case4_4 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 1) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_4 = case4_4.get(1, 0)
-
-    case5_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 0) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case5_1 = case5_1.get(1, 0)
-    case5_2 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 0) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case5_2 = case5_2.get(1, 0)
-
-    case6_1 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 0) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case6_1 = case6_1.get(1, 0)
-    case6_2 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 0) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case6_2 = case6_2.get(1, 0)
-
-    case7_1 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 2) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case7_1 = case7_1.get(1, 0)
-    case7_2 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 1) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case7_2 = case7_2.get(1, 0)
-
-    power_intervention_smoke = case1_1*(1/8) + case1_2*(1/8) + case1_3*(1/8) + case1_5*(1/8) + case2_1*(1/4) + case2_2*(1/4) + case3_1*(1/4) + case3_2*(1/4) + case5_1*(1/2)
-    power_intervention_alc = case1_1*(1/8) + case1_2*(1/8) + case1_4*(1/8) + case1_6*(1/8) + case2_1*(1/4) + case2_3*(1/4) + case4_1*(1/4) + case4_2*(1/4) + case7_1*(1/2)
-    power_intervention_mh = case1_1*(1/8) + case1_3*(1/8) + case1_4*(1/8) + case1_7*(1/8) + case3_1*(1/4) + case3_3*(1/4) + case4_1*(1/4) + case4_3*(1/4) + case6_1*(1/2)
-
-
-    power_control_smoke = case1_4*(1/8) + case1_6*(1/8) + case1_7*(1/8) + case1_8*(1/8) + case2_3*(1/4) + case2_4*(1/4) + case3_3*(1/4) + case3_4*(1/4) + case5_2*(1/2)
-    power_control_alc = case1_3*(1/8) + case1_5*(1/8) + case1_7*(1/8) + case1_8*(1/8) + case2_2*(1/4) + case2_4*(1/4) + case4_3*(1/4) + case4_4*(1/4) + case7_2*(1/2)
-    power_control_mh = case1_2*(1/8) + case1_5*(1/8) + case1_6*(1/8) + case1_8*(1/8) + case3_2*(1/4) + case3_4*(1/4) + case4_2*(1/4) + case4_4*(1/4) + case6_2*(1/2)
-    
-    my_list = [power_intervention_smoke, power_intervention_alc, power_intervention_mh, power_control_smoke, power_control_alc, power_control_mh]
-    print(my_list)
-    
-    df['treatment_smoke'] = df['smoke_inter'].apply(lambda x: np.random.choice([2, 1], p=[power_intervention_smoke, 1- power_intervention_smoke]) if x == 2 
-                                                    else np.random.choice([2, 1], p=[power_control_smoke, 1-power_control_smoke]) if x == 1 else 0)
-    
-    df['treatment_alc'] = df['alc_inter'].apply(lambda x: np.random.choice([2, 1], p=[power_intervention_alc, 1 - power_intervention_alc]) if x == 2 
-                                                    else np.random.choice([2, 1], p=[power_control_alc, 1-power_control_alc]) if x == 1 else 0)
-    
-    df['treatment_mh'] = df['mh_inter'].apply(lambda x: np.random.choice([2, 1], p=[power_intervention_mh, 1-power_intervention_mh]) if x == 2 
-                                                    else np.random.choice([2, 1], p=[power_control_mh, 1-power_control_mh]) if x == 1 else 0)
-    #dfx = try_sample_size(df)
-    return df
-
-@app.post('/simulate_clinical_dataset')
-def create_clinical_dataset(response:Response,prob_2C_2I_and_1C_1I: float,
-    prob_3C_3I: float,
-    prob_2C_1I: float,
-    prob_3C_2I: float,
-    prob_3C_1I: float,
-    prob_1C_0I: float,
-    prob_2C_0I: float,
-    prob_3C_0I: float,
-    male: float,
-    female : float,
-    low_bmi:float,
-    normal_bmi: float,
-    high_bmi: float,
-    l1_edu: float,
-    l2_edu: float,
-    l3_edu: float,
-    l4_edu: float,
-    min_age: int,
-    max_age: int,
-    mean_age: int,
-    sd_age: int ,
-    mean_ttd : float,
-    std_ttd : float,
-    size: int):
-    np.random.seed(200)
-    # data= data.dict()
-    # prob_2C_2I_and_1C_1I = data['prob_2C_2I_and_1C_1I']
-    # prob_3C_3I = data['prob_3C_3I']
-    # prob_2C_1I = data['prob_2C_1I']
-    # prob_3C_2I = data['prob_3C_2I']
-    # prob_3C_1I = data['prob_3C_1I']
-    # prob_1C_0I = data['prob_1C_0I']
-    # prob_2C_0I = data['prob_2C_0I']
-    # prob_3C_0I = data['prob_3C_0I']
-    # male= data['male']
-    # female=data['female'] 
-    # low_bmi=data['low_bmi']
-    # normal_bmi=data['normal_bmi'] 
-    # high_bmi=data['high_bmi'] 
-    # l1_edu=data['l1_edu']
-    # l2_edu=data['l2_edu']
-    # l3_edu=data['l3_edu']
-    # l4_edu=data['l4_edu']
-    # min_age=data['min_age']
-    # max_age=data['max_age']
-    # mean_age=data['mean_age']
-    # sd_age=data['sd_age']
-    # mean_ttd = data['mean_ttd']
-    # std_ttd = data['std_ttd']
-    # size = data['size']
-    gender=list()
-    bmi=list()
-    age=list()
-    edu=list()
-    ttd = list()
-    gender.extend([male,female])
-    bmi.extend([low_bmi,normal_bmi,high_bmi])
-    edu.extend([l1_edu,l2_edu,l3_edu,l4_edu])
-    age.extend([min_age,max_age,mean_age,sd_age])
-    ttd.extend([mean_ttd,std_ttd])
-    age_1 = np.random.normal(loc=age[2], scale=age[3], size=size*27)
-    age_1 = np.clip(age_1, a_min=age[0], a_max=age[1])
-    age_1 = np.round(age_1).astype(int)
-    sex = np.random.choice(2,size*27,p=[gender[0],gender[1]])
-    body_mass= np.random.choice(3,size*27,p=[bmi[0],bmi[1],bmi[2]])
-    education= np.random.choice(4,size*27,p=[edu[0],edu[1],edu[2],edu[3]])
-    cavitation = np.random.choice(2,size*27,p=[0.5,0.5])
-    ttd1 = np.random.normal(loc=ttd[0], scale=ttd[1],size=size*27)
-    alc_int = np.array([])
-    mh_int = np.array([])
-    smoking_int = np.array([])
-    values = [0, 1, 2] #0 NA 1:NO INTER 2:Intervention
-    combinations = np.array(np.meshgrid(*([values] * 3))).T.reshape(-1, 3)
-    for value in values:
-        if not any((combinations == value).all(axis=1)):
-            # If a value doesn't appear, add it to a random combination
-            i = np.random.randint(len(combinations))
-            j = np.random.randint(3)
-            combinations[i, j] = value
-
-    #combinations = np.delete(combinations, 0, axis=0)
-    for i in range(len(combinations)):
-            alc_int = np.append(alc_int, np.tile(combinations[i, 0], size))
-            mh_int = np.append(mh_int, np.tile(combinations[i, 1], size))
-            smoking_int = np.append(smoking_int, np.tile(combinations[i, 2], size))
-            alc_int = alc_int.astype(int)
-            mh_int = mh_int.astype(int)
-            smoking_int = smoking_int.astype(int)
-    values_array = np.column_stack(((alc_int, mh_int, smoking_int)))
-    # filter out rows where all values are zero
-    values_array = values_array[~np.all(values_array == 0, axis=1)]
-    tuples_list = list(map(tuple, values_array))
-    print(tuples_list)
-    combinations_dict = {    
-                            (0, 1, 0):prob_1C_0I,
-                            (0, 2, 0):prob_2C_2I_and_1C_1I,
-                            (1, 0, 0):prob_1C_0I, 
-                        (1, 1, 0):prob_2C_0I, 
-                        (1, 2, 0):prob_2C_1I, 
-                        (2, 0, 0):prob_2C_2I_and_1C_1I, 
-                        (2, 1, 0):prob_2C_1I, 
-                        (2, 2, 0):prob_2C_2I_and_1C_1I, 
-                        (0, 0, 1):prob_1C_0I, 
-                        (0, 1, 1):prob_2C_0I,
-                        (0, 2, 1):prob_2C_1I,
-                        (1, 0, 1):prob_2C_0I ,
-                        (1, 1, 1):prob_3C_0I,
-                        (1, 2, 1):prob_3C_1I ,
-                        (2, 0, 1):prob_2C_1I ,
-                        (2, 1, 1):prob_3C_1I,
-                        (2, 2, 1):prob_3C_2I ,
-                        (0, 0, 2):prob_2C_2I_and_1C_1I, 
-                        (0, 1, 2):prob_2C_1I ,
-                        (0, 2, 2):prob_2C_2I_and_1C_1I, 
-                        (1, 0, 2):prob_2C_1I, 
-                        (1, 1, 2):prob_3C_1I,
-                        (1, 2, 2):prob_3C_2I ,
-                        (2, 0, 2):prob_2C_2I_and_1C_1I, 
-                        (2, 1, 2):prob_3C_2I ,
-                        (2, 2, 2):prob_3C_3I,
-                        }
-    prob = list()
-    prob_random = list()
-    treatment_outcomes = np.empty(len(tuples_list))
-    for i in range(len(tuples_list)):
-        prob.append(combinations_dict.get(tuples_list[i]))
-        prob_random.append(prob[i]+round(np.random.uniform(-0.02,0.02),4))
-        #print(Counter(prob_random))
-        probability = prob_random[i]
-        #probability = prob[i]
-        if np.isnan(probability):
-            treatment_outcomes[i] = np.nan
-        # otherwise, generate a random outcome based on the probability using np.random.choice
-        else:
-            if np.random.rand() < probability:
-                treatment_outcomes[i] = 1
-            else:
-                treatment_outcomes[i] = 0
-
-    treatment_outcomes = treatment_outcomes.astype(int)
-    df = pd.DataFrame({'alc_inter': alc_int, 'mh_inter': mh_int, 'smoke_inter': smoking_int,'age':age_1,'sex':sex,'bmi':body_mass,'education':education,'cavitation':cavitation,'ttd':ttd1})
-    df = df[~((df['alc_inter'] == 0) & (df['mh_inter'] == 0) & (df['smoke_inter'] == 0))]
-    df['treatment_outcomes'] = treatment_outcomes
-    df['alcohol'] = df['alc_inter'].apply(lambda x: 1 if x == 1 or x == 2 else 0)
-    df['mental_health'] = df['mh_inter'].apply(lambda x: 1 if x == 1 or x == 2 else 0)
-    df['smoking'] = df['smoke_inter'].apply(lambda x: 1 if x == 1 or x == 2 else 0)
-    df = df.sample(frac=1).reset_index(drop=True)
-    case1_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 2) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_1 = case1_1.get(1, 0)
-    case1_2 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 2) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_2 = case1_2.get(1, 0)
-    case1_3 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 1) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_3 = case1_3.get(1, 0)
-    case1_4 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 2) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_4 = case1_4.get(1, 0)
-    case1_5 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 1) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_5 = case1_5.get(1, 0)
-    case1_6 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 2) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_6 = case1_6.get(1, 0)
-    case1_7 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 1) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_7 = case1_7.get(1, 0)
-    case1_8 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 1) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case1_8 = case1_8.get(1, 0)
-
-    case2_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 2) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_1 = case2_1.get(1, 0)
-    case2_2 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 1) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_2 = case2_2.get(1, 0)
-    case2_3 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 2) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_3 = case2_3.get(1, 0)
-    case2_4 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 1) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case2_4 = case2_4.get(1, 0)
-
-    case3_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 0) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_1 = case3_1.get(1, 0)
-    case3_2 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 0) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_2 = case3_2.get(1, 0)
-    case3_3 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 0) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_3 = case3_3.get(1, 0)
-    case3_4 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 0) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case3_4 = case3_4.get(1, 0)
-
-    case4_1 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 2) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_1 = case4_1.get(1, 0)
-    case4_2 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 2) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_2 = case4_2.get(1, 0)
-    case4_3 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 1) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_3 = case4_3.get(1, 0)
-    case4_4 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 1) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case4_4 = case4_4.get(1, 0)
-
-    case5_1 = df.loc[(df['smoke_inter'] == 2) & (df['alc_inter'] == 0) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case5_1 = case5_1.get(1, 0)
-    case5_2 = df.loc[(df['smoke_inter'] == 1) & (df['alc_inter'] == 0) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case5_2 = case5_2.get(1, 0)
-
-    case6_1 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 0) & (df['mh_inter'] == 2), 'treatment_outcomes'].value_counts(normalize=True)
-    case6_1 = case6_1.get(1, 0)
-    case6_2 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 0) & (df['mh_inter'] == 1), 'treatment_outcomes'].value_counts(normalize=True)
-    case6_2 = case6_2.get(1, 0)
-
-    case7_1 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 2) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case7_1 = case7_1.get(1, 0)
-    case7_2 = df.loc[(df['smoke_inter'] == 0) & (df['alc_inter'] == 1) & (df['mh_inter'] == 0), 'treatment_outcomes'].value_counts(normalize=True)
-    case7_2 = case7_2.get(1, 0)
-
-    power_intervention_smoke = case1_1*(1/8) + case1_2*(1/8) + case1_3*(1/8) + case1_5*(1/8) + case2_1*(1/4) + case2_2*(1/4) + case3_1*(1/4) + case3_2*(1/4) + case5_1*(1/2)
-    power_intervention_alc = case1_1*(1/8) + case1_2*(1/8) + case1_4*(1/8) + case1_6*(1/8) + case2_1*(1/4) + case2_3*(1/4) + case4_1*(1/4) + case4_2*(1/4) + case7_1*(1/2)
-    power_intervention_mh = case1_1*(1/8) + case1_3*(1/8) + case1_4*(1/8) + case1_7*(1/8) + case3_1*(1/4) + case3_3*(1/4) + case4_1*(1/4) + case4_3*(1/4) + case6_1*(1/2)
-
-
-    power_control_smoke = case1_4*(1/8) + case1_6*(1/8) + case1_7*(1/8) + case1_8*(1/8) + case2_3*(1/4) + case2_4*(1/4) + case3_3*(1/4) + case3_4*(1/4) + case5_2*(1/2)
-    power_control_alc = case1_3*(1/8) + case1_5*(1/8) + case1_7*(1/8) + case1_8*(1/8) + case2_2*(1/4) + case2_4*(1/4) + case4_3*(1/4) + case4_4*(1/4) + case7_2*(1/2)
-    power_control_mh = case1_2*(1/8) + case1_5*(1/8) + case1_6*(1/8) + case1_8*(1/8) + case3_2*(1/4) + case3_4*(1/4) + case4_2*(1/4) + case4_4*(1/4) + case6_2*(1/2)
-    
-    my_list = [power_intervention_smoke, power_intervention_alc, power_intervention_mh, power_control_smoke, power_control_alc, power_control_mh]
-    print(my_list)
-    
-    df['treatment_smoke'] = df['smoke_inter'].apply(lambda x: np.random.choice([2, 1], p=[power_intervention_smoke, 1- power_intervention_smoke]) if x == 2 
-                                                    else np.random.choice([2, 1], p=[power_control_smoke, 1-power_control_smoke]) if x == 1 else 0)
-    
-    df['treatment_alc'] = df['alc_inter'].apply(lambda x: np.random.choice([2, 1], p=[power_intervention_alc, 1 - power_intervention_alc]) if x == 2 
-                                                    else np.random.choice([2, 1], p=[power_control_alc, 1-power_control_alc]) if x == 1 else 0)
-    
-    df['treatment_mh'] = df['mh_inter'].apply(lambda x: np.random.choice([2, 1], p=[power_intervention_mh, 1-power_intervention_mh]) if x == 2 
-                                                    else np.random.choice([2, 1], p=[power_control_mh, 1-power_control_mh]) if x == 1 else 0)
-    dfx = try_sample_size(df,prob_2C_2I_and_1C_1I,prob_3C_3I,prob_2C_1I,prob_3C_2I,prob_3C_1I,prob_1C_0I,prob_2C_0I,prob_3C_0I,male,
-                        female,
-                        low_bmi,
-                        normal_bmi,
-                        high_bmi,
-                        l1_edu,
-                        l2_edu,
-                        l3_edu,
-                        l4_edu,
-                        min_age,
-                        max_age,
-                        mean_age,
-                        sd_age, 
-                        mean_ttd,
-                        std_ttd)
-    #size2 = dfx.shape[0]/26
-    #p1 = calculate_power1(2,1,dfx)
-    #p2 = calculate_power2(2,1,dfx)
-    #p3 = calculate_power3(2,1,dfx)
-    response.status_code = 200
-    
-    #response.content = f"The Power for the 3 Groups are: Smoking : {p1} ; Alcohol : {p2} ;Mental Health : {p3} "
-    response.content = 'Hello world'
-    size1 = str(dfx.shape[0]/26)
-    p1 = calculate_power1(2,1,dfx)
-    p2 = calculate_power2(2,1,dfx)
-    p3 = calculate_power3(2,1,dfx)
-    p1 = str(p1)
-    p2 = str(p2)
-    p3 = str(p3)
-
-    return StreamingResponse(iter([dfx.to_csv(index=False)]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=clinical_samples_dataset.csv",'power_smoking':p1,'power_alcohol':p2,
-        'power_mh':p3})
+if __name__ == '__main__':
+    uvicorn.run(app, host='127.0.0.1', port=8000)
