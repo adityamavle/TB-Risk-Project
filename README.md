@@ -1,3 +1,4 @@
+#RCT Simulations for Enhanced TB Treatment Outcomes
 This project is a FastAPI-based application designed to simulate datasets based on various population parameters. It offers endpoints for dataset simulation, statistical power calculation, optimization of sample sizes, and generation of clinical datasets.
 
 ## Features
